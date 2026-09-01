@@ -1,0 +1,27 @@
+# Entornos virtuales
+.venv/
+venv/
+env/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Secretos y configuracion local
+.env
+.env.*
+!.env.example
+*-sa.json
+credentials*.json
+
+# Editores / SO
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini

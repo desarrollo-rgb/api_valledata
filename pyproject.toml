@@ -1,0 +1,23 @@
+[project]
+name = "api-valledata"
+version = "0.1.0"
+description = "Capa de integracion entre ValleData y DataGov"
+requires-python = ">=3.11,<4.0"
+dependencies = [
+    "fastapi (>=0.141,<1.0)",
+    "uvicorn[standard] (>=0.52,<1.0)",
+]
+
+[tool.poetry]
+# Es una aplicacion, no una libreria: no se instala a si misma como paquete.
+package-mode = false
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^9.1"
+httpx = "^0.28"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# La raiz del proyecto en el sys.path: sin esto pytest no encuentra `app`,
+# porque con package-mode = false Poetry no instala el proyecto como paquete.
+pythonpath = ["."]
