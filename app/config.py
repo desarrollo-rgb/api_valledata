@@ -21,6 +21,34 @@ class Settings(BaseSettings):
     datagov_api_token: str = "dev-local-3f9c2a7b1e5d4680-no-usar-en-produccion"
     datagov_timeout_segundos: int = 30
 
+    # --- Lectura de comentarios de los portales CKAN (Flujo 2) ---
+    # True  -> comentarios de ejemplo en memoria, sin tocar PostgreSQL (desarrollo).
+    # False -> se conecta a las bases PostgreSQL reales.
+    usar_postgres_falso: bool = True
+    # Credenciales de un usuario de BD de SOLO LECTURA (nunca escribe en los portales).
+    # En produccion vienen de Secret Manager; en local, del .env.
+    postgres_host: str = "localhost"
+    postgres_port: int = 5432
+    postgres_user: str = "lector_readonly"
+    postgres_password: str = "password-dummy-no-usar-en-produccion"
+    # Las 14 bases (una por municipio). El municipio se deriva quitando el prefijo "ckan_".
+    postgres_databases: list[str] = [
+        "ckan_alcala",
+        "ckan_argelia",
+        "ckan_bolivar",
+        "ckan_cerrito",
+        "ckan_el_aguila",
+        "ckan_guacari",
+        "ckan_la_victoria",
+        "ckan_pradera",
+        "ckan_riofrio",
+        "ckan_san_pedro",
+        "ckan_trujillo",
+        "ckan_ulloa",
+        "ckan_vijes",
+        "ckan_yotoco",
+    ]
+
 
 @lru_cache
 def get_settings() -> Settings:
