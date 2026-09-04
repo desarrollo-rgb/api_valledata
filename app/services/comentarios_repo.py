@@ -14,10 +14,13 @@ Detalles importantes que exige la realidad de CKAN:
 """
 
 import json
+import logging
 from typing import Protocol
 
 from app.config import get_settings
 from app.models.schemas import Comentario
+
+logger = logging.getLogger("valledata")
 
 
 class ComentariosRepo(Protocol):
@@ -111,9 +114,12 @@ class ComentariosRepoPostgres:
                                     fecha=(creado.isoformat() + "Z") if creado else "",
                                 )
                             )
-            except Exception:
+            except Exception as e:
                 # Tolerancia a fallos parciales: si este municipio falla, lo anotamos
-                # y seguimos con los demas. No exponemos el detalle tecnico del error.
+                # y seguimos con los demas. Al consumidor no le exponemos el detalle,
+                # pero SI lo registramos en el log para poder diagnosticar (p. ej. saber
+                # si fue timeout, credenciales, o que la base no existe).
+                logger.warning("No se pudieron leer los comentarios de %s: %s", municipio, e)
                 municipios_con_error.append(municipio)
 
         return comentarios, municipios_con_error

@@ -8,8 +8,7 @@ DataGov. Tiene dos responsabilidades:
 2. **Consumir los datos de cultivos** que expone DataGov (desde BigQuery) y **reexponerlos**
    para que los portales CKAN los puedan ingerir.
 
-> Para entender **por qué** existe este servicio y cómo encaja en el ecosistema, revisa la
-> documentación del proyecto. Este README es para **instalar, configurar, correr y contribuir**.
+Este README cubre cómo **instalar, configurar, correr y contribuir**.
 
 ---
 

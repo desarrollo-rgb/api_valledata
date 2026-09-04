@@ -14,9 +14,13 @@ Un DataGov caido ya se maneja con un 502 en el Flujo 1; no debe marcar a ValleDa
 "no listo", porque el Flujo 2 (comentarios) sigue funcionando.
 """
 
+import logging
+
 from fastapi import APIRouter, HTTPException, status
 
 from app.config import get_settings
+
+logger = logging.getLogger("valledata")
 
 router = APIRouter(tags=["salud"])
 
@@ -73,6 +77,7 @@ def _dependencias_listas() -> tuple[bool, str]:
             with conexion.cursor() as cursor:
                 cursor.execute("SELECT 1")
         return True, "postgres reachable"
-    except Exception:
-        # No exponemos hacia afuera el detalle tecnico del error.
+    except Exception as e:
+        # Al consumidor no le exponemos el detalle, pero SI lo registramos en el log.
+        logger.warning("Readiness: PostgreSQL no responde: %s", e)
         return False, "postgres unavailable"
