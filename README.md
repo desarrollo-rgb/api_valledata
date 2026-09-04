@@ -1,323 +1,413 @@
 # API ValleData
 
-Esqueleto de una API en **FastAPI**, con **pyenv** para fijar la versión de Python y
-**Poetry** para gestionar dependencias. Por ahora solo expone un endpoint de prueba
-en `GET /`.
+API en **FastAPI** que actúa como **capa de integración del proyecto ValleData** frente a
+DataGov. Tiene dos responsabilidades:
 
-Este README documenta **cómo se construyó la plantilla desde cero**, para poder
-replicarla en otro proyecto.
+1. **Leer los comentarios** ciudadanos de los **14 portales CKAN** (una base PostgreSQL por
+   municipio) y exponerlos en un endpoint propio.
+2. **Consumir los datos de cultivos** que expone DataGov (desde BigQuery) y **reexponerlos**
+   para que los portales CKAN los puedan ingerir.
+
+> Para entender **por qué** existe este servicio y cómo encaja en el ecosistema, revisa la
+> documentación del proyecto. Este README es para **instalar, configurar, correr y contribuir**.
 
 ---
 
-## Requisitos previos
+## ¿Qué expone? (endpoints)
 
-Se instalan una sola vez en la máquina, no por proyecto.
-
-| Herramienta | Para qué sirve | Comprobar |
+| Método y ruta | Qué devuelve | Token |
 | --- | --- | --- |
-| [pyenv-win](https://github.com/pyenv-win/pyenv-win) | Instalar y cambiar entre versiones de Python | `pyenv --version` |
-| [Poetry](https://python-poetry.org/docs/#installation) | Gestionar dependencias y el entorno virtual | `poetry --version` |
+| `GET /health` | Liveness: `{"status": "alive"}`. Para la plataforma. | No |
+| `GET /ready` | Readiness: revisa que PostgreSQL responda. `200` o `503`. | No |
+| `GET /api/v1/dataset_valledata/gold_cultivos_valle_geo` | Cultivos que ValleData obtuvo de DataGov (Flujo 1). Parámetro `limite` (1–1000). | **Sí** |
+| `GET /api/v1/bd_ckan/comments` | Comentarios de los 14 portales CKAN, con `municipios_con_error` (Flujo 2). | **Sí** |
 
-Versiones usadas aquí: pyenv 3.1.1, Poetry 2.2.1.
+**Documentación interactiva** (Swagger) cuando el servidor está arriba: http://localhost:8001/docs
+
+> Convención: ValleData se levanta en el puerto **8001** y DataGov en el **8000**, para que
+> puedan correr a la vez en local.
 
 ---
 
-## Paso a paso
+## Los dos modos: falso y real
 
-### 1. Crear la carpeta e inicializar git
+Cada dependencia externa (DataGov y PostgreSQL) tiene **dos implementaciones** detrás de la
+misma interfaz, y se elige por configuración:
 
-```bash
-mkdir api_valledata
+- **Modo falso** (`true`): responde con datos de ejemplo en memoria. **No llama a DataGov ni
+  toca PostgreSQL.** Ideal para desarrollar y correr las pruebas sin credenciales ni red.
+- **Modo real** (`false`): llama a DataGov / se conecta a las 14 bases PostgreSQL.
+
+Se controla con `USAR_DATAGOV_FALSO` (Flujo 1) y `USAR_POSTGRES_FALSO` (Flujo 2). Pasar de
+falso a real **no cambia ni una línea de código**, solo el `.env`.
+
+---
+
+## 1. Requisitos (se instalan una sola vez en tu máquina)
+
+| Herramienta | Para qué sirve |
+| --- | --- |
+| **pyenv** | Instala y fija la versión de Python que usa el proyecto (3.11.9) |
+| **Poetry** | Gestiona las dependencias y el entorno virtual |
+| **gcloud CLI + kubectl** | *Solo para modo real:* túnel al PostgreSQL privado (ver §4.2) |
+
+> Instrucciones para **Windows** (PowerShell). **Tras instalar cada herramienta, cierra y
+> vuelve a abrir la terminal** para que el PATH se actualice.
+
+### 1.1 Instalar pyenv (pyenv-win)
+
+1. Abre **PowerShell** y ejecuta el instalador oficial:
+
+   ```powershell
+   Invoke-WebRequest -UseBasicParsing -Uri "https://raw.githubusercontent.com/pyenv-win/pyenv-win/master/pyenv-win/install-pyenv-win.ps1" -OutFile "./install-pyenv-win.ps1"; &"./install-pyenv-win.ps1"
+   ```
+
+2. Cierra y vuelve a abrir PowerShell.
+3. Comprueba: `pyenv --version`
+
+   > Si dice que `pyenv` no se reconoce, reinicia el equipo o revisa la
+   > [guía de pyenv-win](https://github.com/pyenv-win/pyenv-win#installation).
+
+### 1.2 Instalar Python con pyenv
+
+```powershell
+pyenv install 3.11.9
+```
+```powershell
+pyenv global 3.11.9
+```
+```powershell
+python --version
 ```
 
+Debe imprimir `Python 3.11.9`.
+
+### 1.3 Instalar Poetry
+
+1. Instala Poetry con su instalador oficial:
+
+   ```powershell
+   (Invoke-WebRequest -Uri https://install.python-poetry.org -UseBasicParsing).Content | python -
+   ```
+
+2. Agrega al PATH la ruta que te indica el instalador (en Windows suele ser
+   `%APPDATA%\Python\Scripts`) y vuelve a abrir la terminal.
+3. Comprueba: `poetry --version`
+
+> Este repo ya trae `poetry.toml` para crear el entorno virtual dentro del proyecto (`.venv/`).
+
+> **Mac / Linux:** pyenv con su [guía oficial](https://github.com/pyenv/pyenv#installation)
+> (o `brew install pyenv`) y Poetry con `curl -sSL https://install.python-poetry.org | python3 -`.
+
+---
+
+## 2. Puesta en marcha (clonar y correr en modo falso)
+
+Con esto tienes la API corriendo **sin credenciales ni túnel** en ~5 minutos.
+
+**1. Clona el repositorio y entra en la carpeta:**
+
+```bash
+git clone https://github.com/desarrollo-rgb/api_valledata.git
+```
 ```bash
 cd api_valledata
 ```
 
-```bash
-git init
-```
-
-### 2. Fijar la versión de Python con pyenv
-
-Primero mira qué versiones tienes instaladas:
-
-```bash
-pyenv versions
-```
-
-Si no tienes la que quieres, instálala:
+**2. Instala la versión de Python que el proyecto exige** (`.python-version` ya fija `3.11.9`):
 
 ```bash
 pyenv install 3.11.9
 ```
 
-Y fíjala **para este proyecto**:
+**3. Crea tu archivo de configuración local** a partir de la plantilla:
 
 ```bash
-pyenv local 3.11.9
+cp .env.example .env
 ```
 
-Esto crea un archivo `.python-version` con el valor `3.11.9`. Desde ahora, cualquier
-comando `python` ejecutado dentro de esta carpeta usará esa versión. El archivo **sí se
-versiona en git**: es lo que garantiza que todo el equipo use el mismo Python.
+**4. Pon un token cualquiera en el `.env`.** `API_TOKEN` es **obligatorio**: si falta, la
+app no arranca. Para desarrollo sirve cualquier valor, por ejemplo:
 
-Comprueba:
-
-```bash
-python --version
+```
+API_TOKEN=dev-local-token-de-prueba
 ```
 
-### 3. Configurar Poetry para crear el entorno dentro del proyecto
+> El `.env` es tuyo y **no se sube a git**. En modo falso no necesitas nada más.
 
-Por defecto Poetry guarda los entornos virtuales en una carpeta global del sistema.
-Es más cómodo tenerlo dentro del proyecto, en `.venv/`:
-
-```bash
-poetry config virtualenvs.in-project true --local
-```
-
-El `--local` hace que la configuración aplique **solo a este proyecto**, y la guarda en
-un archivo `poetry.toml`. Sin `--local` cambiarías la configuración global de tu máquina.
-
-### 4. Crear el `pyproject.toml`
-
-Este archivo es el centro del proyecto: describe el paquete y sus dependencias.
-Puedes generarlo de forma interactiva con `poetry init`, o crearlo a mano:
-
-```toml
-[project]
-name = "api-valledata"
-version = "0.1.0"
-description = "Capa de integracion entre ValleData y DataGov"
-requires-python = ">=3.11,<4.0"
-dependencies = [
-    "fastapi (>=0.141,<1.0)",
-    "uvicorn[standard] (>=0.52,<1.0)",
-]
-
-[tool.poetry]
-# Es una aplicacion, no una libreria: no se instala a si misma como paquete.
-package-mode = false
-
-[tool.poetry.group.dev.dependencies]
-pytest = "^9.1"
-httpx = "^0.28"
-
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-pythonpath = ["."]
-```
-
-Tres detalles que conviene entender:
-
-- **`package-mode = false`** — Esto es una aplicación que se ejecuta, no una librería que
-  otros instalan con `pip install`. Con esta línea, Poetry gestiona las dependencias pero
-  no intenta empaquetar e instalar tu propio código.
-- **`pythonpath = ["."]`** — Consecuencia de lo anterior: como el proyecto no se instala,
-  pytest no encontraría el módulo `app`. Esta línea añade la raíz del proyecto al
-  `sys.path` de las pruebas. Sin ella obtienes `ModuleNotFoundError: No module named 'app'`.
-- **Grupo `dev`** — `pytest` y `httpx` solo hacen falta para desarrollar y probar. Al
-  separarlos, un despliegue en producción puede instalar solo lo necesario con
-  `poetry install --without dev`.
-
-### 5. Decirle a Poetry qué Python usar
-
-```bash
-poetry env use $(pyenv which python)
-```
-
-En Windows, si el comando anterior no resuelve, pasa la ruta completa que devuelve
-`pyenv which python`:
-
-```bash
-poetry env use C:\Users\TU_USUARIO\.pyenv\pyenv-win\versions\3.11.9\python.exe
-```
-
-Este paso es importante: sin él, Poetry usaría el Python que encuentre primero en el
-`PATH`, que puede no ser el que fijaste con pyenv.
-
-### 6. Instalar las dependencias
+**5. Instala las dependencias:**
 
 ```bash
 poetry install
 ```
 
-Esto crea `.venv/`, instala todo y genera **`poetry.lock`**, un archivo que registra la
-versión exacta de cada paquete y de cada dependencia de esas dependencias.
-`poetry.lock` **se versiona en git**: es lo que hace que la instalación sea idéntica en
-tu máquina, en la de tu compañero y en el servidor.
-
-> Para añadir una librería más adelante: `poetry add nombre-libreria`
-> Si es solo para desarrollo: `poetry add --group dev nombre-libreria`
-
-### 7. Escribir la aplicación
-
-Crea la carpeta `app/` con dos archivos.
-
-`app/__init__.py` va **vacío**: su sola presencia marca la carpeta como paquete de
-Python, y es lo que permite escribir `from app.main import app`.
-
-`app/main.py`:
-
-```python
-"""Punto de entrada de la API ValleData."""
-
-from fastapi import FastAPI
-
-app = FastAPI(
-    title="API ValleData",
-    version="0.1.0",
-)
-
-
-@app.get("/")
-async def hola_mundo() -> dict[str, str]:
-    return {"mensaje": "Hola mundo"}
-```
-
-### 8. Escribir la prueba
-
-`tests/test_main.py`:
-
-```python
-from fastapi.testclient import TestClient
-
-from app.main import app
-
-cliente = TestClient(app)
-
-
-def test_hola_mundo():
-    respuesta = cliente.get("/")
-    assert respuesta.status_code == 200
-    assert respuesta.json() == {"mensaje": "Hola mundo"}
-```
-
-`TestClient` levanta la aplicación en memoria y le hace peticiones reales, sin necesidad
-de arrancar un servidor. Viene de Starlette y necesita `httpx` instalado, por eso está en
-las dependencias de desarrollo.
-
-### 9. Crear el `.gitignore`
-
-Lo mínimo imprescindible:
-
-```
-.venv/
-__pycache__/
-*.py[cod]
-.pytest_cache/
-.env
-```
-
-La regla clave es que **`.venv/` nunca se sube**: se reconstruye con `poetry install`.
-Lo que sí se sube es `pyproject.toml` y `poetry.lock`.
-
-### 10. Verificar que todo funciona
+**6. Verifica que todo funciona corriendo las pruebas:**
 
 ```bash
 poetry run pytest
 ```
 
-```bash
-poetry run uvicorn app.main:app --reload --port 8000
-```
+Si ves `15 passed`, todo quedó bien. (Las pruebas corren siempre en modo falso, sin tocar
+DataGov ni PostgreSQL, gracias a `tests/conftest.py`.)
 
-- Endpoint: http://localhost:8000/
-- Documentación interactiva: http://localhost:8000/docs
-
-`--reload` reinicia el servidor cada vez que guardas un archivo. Es para desarrollo; en
-producción no se usa.
-
-### 11. Primer commit
+**7. Levanta el servidor** (puerto 8001):
 
 ```bash
-git add -A
+poetry run uvicorn app.main:app --reload --port 8001
 ```
 
-```bash
-git commit -m "chore: plantilla base de la API ValleData"
-```
+- Documentación interactiva: http://localhost:8001/docs
+- Health check: http://localhost:8001/health
 
 ---
 
-## Resumen: qué archivo hace qué
+## 3. Configuración: el archivo `.env`
 
-| Archivo | Se versiona | Para qué sirve |
+### Seguridad
+
+| Variable | Qué es | Valor en desarrollo |
 | --- | --- | --- |
-| `.python-version` | Sí | Fija la versión de Python (pyenv) |
-| `pyproject.toml` | Sí | Declara dependencias y configuración de herramientas |
-| `poetry.lock` | Sí | Versiones exactas instaladas: instalación reproducible |
-| `poetry.toml` | Sí | Config local de Poetry (entorno dentro del proyecto) |
-| `.gitignore` | Sí | Qué no debe subirse |
-| `app/main.py` | Sí | La aplicación |
-| `tests/` | Sí | Las pruebas |
-| `.venv/` | **No** | Entorno virtual, se reconstruye con `poetry install` |
+| `API_TOKEN` | Token que exige ESTA API. **Obligatorio** (si falta, no arranca). | Un valor de prueba |
+
+### Flujo 1 — cliente hacia DataGov (cultivos)
+
+| Variable | Qué es | Desarrollo (falso) |
+| --- | --- | --- |
+| `USAR_DATAGOV_FALSO` | `true` = datos de ejemplo; `false` = llama a DataGov | `true` |
+| `DATAGOV_API_BASE_URL` | URL base de la API DataGov | `http://localhost:8000` |
+| `DATAGOV_API_TOKEN` | Token que DataGov exige. **Debe ser idéntico al `API_TOKEN` de DataGov.** | — |
+| `DATAGOV_TIMEOUT_SEGUNDOS` | Timeout de las llamadas | `30` |
+
+### Flujo 2 — PostgreSQL (comentarios CKAN)
+
+| Variable | Qué es | Desarrollo (falso) |
+| --- | --- | --- |
+| `USAR_POSTGRES_FALSO` | `true` = comentarios de ejemplo; `false` = se conecta a las 14 bases | `true` |
+| `POSTGRES_HOST` | Host de PostgreSQL (en local, vía túnel: `127.0.0.1`) | `localhost` |
+| `POSTGRES_PORT` | Puerto | `5432` |
+| `POSTGRES_USER` | Usuario de BD (idealmente de **solo lectura**) | — |
+| `POSTGRES_PASSWORD` | Contraseña del usuario | — |
+
+> Las 14 bases (`ckan_alcala`, `ckan_argelia`, …) están definidas en `app/config.py`
+> (`postgres_databases`). Son 14 bases dentro de **una misma instancia**: el código se
+> conecta a la misma dirección cambiando el `dbname` en cada vuelta.
 
 ---
 
-## Cómo lo levanta alguien que clona el repo
+## 4. Pasar a datos reales
 
-Todo el paso a paso anterior se reduce a esto para quien llega después:
+### 4.1 DataGov (Flujo 1)
+
+1. Ten la API DataGov corriendo (por defecto en `http://localhost:8000`).
+2. En tu `.env`:
+   ```
+   USAR_DATAGOV_FALSO=false
+   DATAGOV_API_BASE_URL=http://localhost:8000
+   DATAGOV_API_TOKEN=<el mismo API_TOKEN configurado en DataGov>
+   ```
+   > 🔑 Si `DATAGOV_API_TOKEN` no coincide con el `API_TOKEN` de DataGov, recibirás `401`
+   > y este endpoint responderá `502`.
+
+### 4.2 PostgreSQL (Flujo 2) — conectarse a las bases privadas
+
+Las bases viven en un **Cloud SQL con solo IP privada** (no tiene IP pública). Tu máquina
+local está fuera de la red de GCP, así que **no puede conectarse directo**. La forma que usa
+el equipo es un **túnel a través del clúster de Kubernetes** (que sí está dentro de la red).
+
+**Requisitos previos** (una sola vez):
 
 ```bash
-git clone https://github.com/desarrollo-rgb/api_valledata.git
+gcloud components install kubectl
+```
+```bash
+gcloud components install gke-gcloud-auth-plugin
 ```
 
-```bash
-cd api_valledata
-```
+> Si da error de permisos, corre esos comandos en una PowerShell **como administrador**.
+
+**Datos que te da el DevOps** (los de abajo son los de QA; confírmalos):
+
+| Dato | Valor QA |
+| --- | --- |
+| Clúster GKE | `gke-primary` (región `us-east1`, proyecto `co-valledata-prd`) |
+| IP privada del Cloud SQL | `10.146.0.3:5432` |
+| Usuario / contraseña de BD | (te los entrega el DevOps) |
+
+**Pasos para abrir el túnel:**
+
+**1. Autentícate con la cuenta correcta y fija el proyecto:**
 
 ```bash
-pyenv install 3.11.9
+gcloud auth login datos@valledelcauca.gov.co
+```
+```bash
+gcloud config set project co-valledata-prd
 ```
 
-```bash
-poetry install
-```
+**2. Conecta tu `kubectl` al clúster:**
 
 ```bash
-poetry run uvicorn app.main:app --reload --port 8000
+gcloud container clusters get-credentials gke-primary --region us-east1 --project co-valledata-prd
 ```
+
+**3. Crea un pod temporal que reenvía hacia el Cloud SQL** (usa `socat` como relevo):
+
+```bash
+kubectl run sql-tunnel --image=alpine/socat --restart=Never --labels=app=sql-tunnel -- tcp-listen:5432,fork,reuseaddr tcp-connect:10.146.0.3:5432
+```
+
+**4. Espera a que el pod esté listo:**
+
+```bash
+kubectl wait --for=condition=Ready pod/sql-tunnel --timeout=60s
+```
+
+**5. Abre el túnel** desde tu `localhost:5432` hasta el pod (deja esta terminal abierta):
+
+```bash
+kubectl port-forward pod/sql-tunnel 5432:5432
+```
+
+Cuando veas `Forwarding from 127.0.0.1:5432 -> 5432`, el túnel está vivo.
+
+**6. En tu `.env`, apunta a `127.0.0.1` y pon las credenciales reales:**
+
+```
+USAR_POSTGRES_FALSO=false
+POSTGRES_HOST=127.0.0.1
+POSTGRES_PORT=5432
+POSTGRES_USER=<usuario-de-bd>
+POSTGRES_PASSWORD=<contraseña-de-bd>
+```
+
+**7. Levanta el API en otra terminal** y prueba `GET /api/v1/bd_ckan/comments`.
+
+> **Al terminar tu sesión:** cierra el `port-forward` con `Ctrl + C` y borra el pod temporal:
+> ```bash
+> kubectl delete pod sql-tunnel
+> ```
+
+> **Seguridad:** el código **solo lee** (nunca escribe en los portales). Además marca cada
+> conexión como `read_only`, así que aunque el usuario tuviera permisos de escritura,
+> PostgreSQL rechazaría cualquier intento de modificación.
 
 ---
 
-## Estructura final
+## 5. Autenticación: cómo llamar a la API
+
+Los endpoints de datos exigen un **token** en la cabecera `Authorization: Bearer <token>`
+(el valor de tu `API_TOKEN`).
+
+Sin token → **401**:
+
+```bash
+curl -i "http://localhost:8001/api/v1/bd_ckan/comments"
+```
+
+Con el token → **200 + datos**:
+
+```bash
+curl -i -H "Authorization: Bearer TU_TOKEN" "http://localhost:8001/api/v1/bd_ckan/comments"
+```
+
+Desde el navegador: entra a http://localhost:8001/docs, pulsa **Authorize** 🔒, pega el
+token una vez y prueba los endpoints.
+
+---
+
+## 6. Cómo está organizado el proyecto
 
 ```
 api_valledata/
 ├── app/
-│   ├── __init__.py
-│   └── main.py          # aplicacion FastAPI
-├── tests/
-│   └── test_main.py
-├── .python-version      # 3.11.9
-├── pyproject.toml       # dependencias y configuracion
-├── poetry.lock          # versiones exactas
-├── poetry.toml          # config local de Poetry
+│   ├── main.py                 # arranque de FastAPI; conecta routers y manejadores de error
+│   ├── config.py               # lee el .env → Settings (incluye las 14 bases)
+│   ├── security.py             # autenticación por token (el "guardián")
+│   ├── errors.py               # excepciones de dominio + respuestas de error limpias
+│   ├── models/
+│   │   └── schemas.py          # contrato de datos (Comentario)
+│   ├── api/
+│   │   ├── health.py           # GET /health y GET /ready (públicos)
+│   │   ├── datasets.py         # GET .../gold_cultivos_valle_geo (reexpone DataGov)
+│   │   └── comentarios.py      # GET .../comments (14 bases PostgreSQL)
+│   └── services/
+│       ├── datagov_client.py   # cómo se piden los cultivos: falso ↔ HTTP a DataGov
+│       └── comentarios_repo.py # de dónde salen los comentarios: falso ↔ PostgreSQL
+├── tests/                      # pruebas (conftest.py fuerza modo falso)
+├── .env.example                # plantilla de configuración (SÍ se versiona)
+├── .env                        # tu configuración local (NO se versiona)
+├── .python-version             # versión de Python fijada (3.11.9)
+├── pyproject.toml / poetry.lock
 └── .gitignore
 ```
 
+**La idea clave del diseño:** los endpoints (`api/`) no saben de dónde vienen los datos.
+Eso lo deciden los `services/` según la configuración. Por eso pasar de datos inventados a
+reales es solo cambiar el `.env`.
+
+**Detalles de la realidad de CKAN que maneja el código:**
+
+- La columna del texto (`comment`) es un JSON multilingüe `{"es": "...", "en": "..."}` que
+  se parsea a `texto_es` / `texto_en` (con tolerancia a texto plano en filas antiguas).
+- El `usuario` puede ser **nulo** (comentarios anónimos).
+- El `id` **no es único entre municipios**: la clave real es `municipio + id`.
+- **Tolerancia a fallos parciales:** si una base no responde, se registra en
+  `municipios_con_error` y las demás siguen. Nunca se detiene todo por un municipio.
+
 ---
 
-## Comandos del día a día
+## 7. Manejo de errores
+
+- Si **DataGov está caído** o responde con error, el endpoint de cultivos devuelve un
+  **502** limpio (`"No se pudo contactar a la API DataGov"`), no un 500 con traza.
+- Si **un municipio** de PostgreSQL falla, su nombre aparece en `municipios_con_error` y el
+  resto de comentarios se devuelve igual (no se cae todo).
+- Cualquier error no previsto devuelve un **500** genérico; el detalle va al log.
+- `GET /ready` devuelve **503** si PostgreSQL no responde (en modo real, p. ej. si el túnel
+  está apagado).
+
+---
+
+## 8. Cómo contribuir / hacer cambios
+
+1. Crea una rama: `git checkout -b feature/lo-que-vas-a-hacer`
+2. Haz tus cambios y **corre las pruebas** antes de subir: `poetry run pytest`
+3. Commit, sube la rama y abre un Pull Request.
+
+**Añadir una librería:**
+
+```bash
+poetry add nombre-libreria           # dependencia normal
+poetry add --group dev nombre        # solo para desarrollo/pruebas
+```
+
+**Convenciones del proyecto:**
+
+- Código y comentarios **en español**.
+- **Nunca** subas secretos (tokens, contraseñas de BD). Van en el `.env`. Si algo es secreto
+  y debe conocerse, documéntalo en `.env.example` con un valor de ejemplo.
+- Contra PostgreSQL: **solo lectura**, nunca escritura en los portales.
+- Toda funcionalidad nueva debería venir con su prueba en `tests/`.
+
+**Qué NO se sube al repo** (ya cubierto por `.gitignore`):
+
+| No se sube | Por qué |
+| --- | --- |
+| `.env` | Configuración local y secretos (incluye credenciales de BD) |
+| `.venv/` | Se reconstruye con `poetry install` |
+| `__pycache__/`, `.pytest_cache/` | Temporales de Python |
+
+---
+
+## 9. Comandos del día a día
 
 | Qué quieres hacer | Comando |
 | --- | --- |
-| Levantar el servidor | `poetry run uvicorn app.main:app --reload` |
+| Levantar el servidor | `poetry run uvicorn app.main:app --reload --port 8001` |
 | Correr las pruebas | `poetry run pytest` |
+| Abrir el túnel a PostgreSQL | `kubectl port-forward pod/sql-tunnel 5432:5432` |
+| Borrar el pod del túnel | `kubectl delete pod sql-tunnel` |
 | Añadir una librería | `poetry add nombre` |
 | Añadir una librería de desarrollo | `poetry add --group dev nombre` |
 | Quitar una librería | `poetry remove nombre` |
 | Ver las dependencias instaladas | `poetry show` |
-| Abrir una consola dentro del entorno | `poetry env activate` |
-
----
-
-## Documentos de referencia del proyecto
-
-Están en la carpeta [`apis-externas/`](apis-externas):
-
-- [`CONTEXTO-API-VALLEDATA.md`](apis-externas/CONTEXTO-API-VALLEDATA.md) — qué es este servicio y por qué existe.
-- [`IMPLEMENTACION-API-VALLEDATA.md`](apis-externas/IMPLEMENTACION-API-VALLEDATA.md) — el plan de construcción por fases.
-- [`CONTEXTO-API-DATAGOV.md`](apis-externas/CONTEXTO-API-DATAGOV.md) y [`IMPLEMENTACION-API-DATAGOV.md`](apis-externas/IMPLEMENTACION-API-DATAGOV.md) — el otro lado de la integración.
