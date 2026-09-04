@@ -13,6 +13,12 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
+    # --- Seguridad ---
+    # Token que debe presentar quien consume esta API (hoy, la API DataGov).
+    # No tiene valor por defecto A PROPOSITO: si falta, la app no arranca. Es preferible
+    # fallar al arrancar que quedar sin proteccion por un olvido (fail closed).
+    api_token: str
+
     # --- Cliente hacia la API DataGov (Flujo 1: consumir datos) ---
     # True  -> datos de ejemplo, sin llamar a DataGov (desarrollo y pruebas sin red).
     # False -> llama a la API DataGov real.

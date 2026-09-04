@@ -90,6 +90,11 @@ class ComentariosRepoPostgres:
                     dbname=base,
                     connect_timeout=10,
                 ) as conexion:
+                    # Candado de seguridad: aunque el usuario tenga permisos de
+                    # escritura, marcamos TODA la sesion como de solo lectura. Si algo
+                    # intentara escribir, PostgreSQL mismo lo rechaza. Nunca tocamos
+                    # los portales.
+                    conexion.read_only = True
                     with conexion.cursor() as cursor:
                         cursor.execute(self._CONSULTA)
                         for id_, package_id, texto, usuario, creado in cursor.fetchall():

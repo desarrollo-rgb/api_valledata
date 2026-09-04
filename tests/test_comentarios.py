@@ -1,13 +1,15 @@
 from fastapi.testclient import TestClient
 
+from app.config import get_settings
 from app.main import app
 from app.services.comentarios_repo import _parsear_texto
 
 cliente = TestClient(app)
+CABECERA_VALIDA = {"Authorization": f"Bearer {get_settings().api_token}"}
 
 
 def test_comentarios_devuelve_datos_falsos():
-    respuesta = cliente.get("/api/v1/comentarios")
+    respuesta = cliente.get("/api/v1/bd_ckan/comments", headers=CABECERA_VALIDA)
     assert respuesta.status_code == 200
 
     cuerpo = respuesta.json()
@@ -24,9 +26,14 @@ def test_comentarios_devuelve_datos_falsos():
     }
 
 
+def test_comentarios_sin_token_da_401():
+    respuesta = cliente.get("/api/v1/bd_ckan/comments")
+    assert respuesta.status_code == 401
+
+
 def test_ids_se_repiten_entre_municipios():
     # La clave real es municipio + id: el mismo id existe en municipios distintos.
-    comentarios = cliente.get("/api/v1/comentarios").json()["comentarios"]
+    comentarios = cliente.get("/api/v1/bd_ckan/comments", headers=CABECERA_VALIDA).json()["comentarios"]
     ids_alcala = {c["id"] for c in comentarios if c["municipio"] == "alcala"}
     ids_cerrito = {c["id"] for c in comentarios if c["municipio"] == "cerrito"}
     assert 1 in ids_alcala and 1 in ids_cerrito

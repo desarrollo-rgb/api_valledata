@@ -7,15 +7,24 @@ Content-Type que CKAN necesita.
 
 from fastapi import APIRouter, Depends, Query
 
+from app.security import verificar_token
 from app.services.datagov_client import ClienteDataGov, get_cliente_datagov
 
-router = APIRouter(prefix="/api/v1/datasets", tags=["datasets"])
+# La dependencia va en el router: protege TODOS los endpoints de datasets de una vez.
+router = APIRouter(
+    prefix="/api/v1/dataset_valledata",
+    tags=["dataset Valledata"],
+    dependencies=[Depends(verificar_token)],
+)
 
 
-@router.get("/agricultura")
+@router.get(
+    "/gold_cultivos_valle_geo",
+    summary="Obtener información de la tabla de cultivos",
+)
 async def obtener_agricultura(
     limite: int = Query(default=100, ge=1, le=1000, description="Maximo de filas a pedir a DataGov."),
     cliente: ClienteDataGov = Depends(get_cliente_datagov),
 ) -> dict:
-    """Devuelve los datos de agricultura que ValleData obtuvo de DataGov."""
+    """Devuelve los datos de cultivos que ValleData obtuvo de DataGov."""
     return cliente.obtener_agricultura(limite=limite)

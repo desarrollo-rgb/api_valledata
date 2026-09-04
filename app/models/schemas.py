@@ -16,8 +16,9 @@ class Comentario(BaseModel):
     municipio: str
     # Id del dataset comentado (columna "package_Id" en la BD).
     dataset_id: str
-    # Autor del comentario (columna user_id).
-    usuario: str
+    # Autor del comentario (columna user_id). Puede ser nulo: en CKAN los
+    # comentarios pueden ser anonimos, asi que el user_id no siempre viene.
+    usuario: str | None
     # Texto del comentario separado por idioma (se parsea del JSON multilingue de la BD).
     texto_es: str | None
     texto_en: str | None

@@ -9,16 +9,22 @@ respuesta, pero los demas municipios si. El consumidor sabe asi que debe reinten
 
 from fastapi import APIRouter, Depends
 
+from app.security import verificar_token
 from app.services.comentarios_repo import ComentariosRepo, get_comentarios_repo
 
-router = APIRouter(prefix="/api/v1", tags=["comentarios"])
+# La dependencia va en el router: protege TODOS los endpoints de una vez.
+router = APIRouter(
+    prefix="/api/v1/bd_ckan",
+    tags=["bases de datos ckan"],
+    dependencies=[Depends(verificar_token)],
+)
 
 
-@router.get("/comentarios")
+@router.get("/comments")
 async def listar_comentarios(
     repo: ComentariosRepo = Depends(get_comentarios_repo),
 ) -> dict:
-    """Devuelve los comentarios de los portales, con la lista de municipios que fallaron."""
+    """Devuelve los comentarios hechos a los recursos de los conjuntos de datos de los portales ckan de los 14 municipios del proyecto, con la lista de municipios que fallaron."""
     comentarios, municipios_con_error = repo.obtener_comentarios()
     return {
         "comentarios": comentarios,

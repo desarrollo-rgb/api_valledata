@@ -56,11 +56,23 @@ class ClienteDataGovHTTP:
         )
 
     def obtener_agricultura(self, limite: int) -> dict:
-        respuesta = self._cliente.get(
-            "/api/v1/datasets/agricultura",
-            params={"limite": limite},
-        )
-        respuesta.raise_for_status()
+        import httpx
+
+        from app.errors import ErrorDataGovNoDisponible, ErrorDataGovRespuesta
+
+        try:
+            respuesta = self._cliente.get(
+                "/api/v1/dataset_valledata/gold_cultivos_valle_geo",
+                params={"limite": limite},
+            )
+            respuesta.raise_for_status()
+        except httpx.HTTPStatusError as e:
+            # DataGov contesto, pero con 4xx/5xx (p. ej. token malo, o fallo en BigQuery).
+            raise ErrorDataGovRespuesta(f"codigo {e.response.status_code}") from e
+        except httpx.RequestError as e:
+            # Ni siquiera se pudo contactar a DataGov (caido, timeout, DNS, red).
+            raise ErrorDataGovNoDisponible(str(e)) from e
+
         # Pass-through: devolvemos el JSON tal cual lo entrega DataGov.
         return respuesta.json()
 
