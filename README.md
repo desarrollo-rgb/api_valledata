@@ -49,6 +49,42 @@ falso a real **no cambia ni una línea de código**, solo el `.env`.
 
 ---
 
+## El parámetro `limite` y el control de volumen
+
+Los endpoints de datasets (`consume/...`, los que ValleData obtiene de DataGov) aceptan un
+parámetro opcional **`limite`** que controla cuántas filas se devuelven. Su comportamiento
+se **configura por entorno**, sin tocar código (solo reiniciar):
+
+| Variable | Qué hace | Por defecto |
+| --- | --- | --- |
+| `LIMITE_MINIMO_SELECT` | Valor mínimo que se acepta en `limite`. | `1` |
+| `LIMITE_MAXIMO_SELECT` | Valor máximo que se acepta en `limite`. | `1000000` |
+| `PERMITIR_FULL_SELECT` | Qué hacer cuando **no** se envía `limite`. | `true` |
+
+### Cómo se comporta
+
+| Petición | `PERMITIR_FULL_SELECT=true` | `PERMITIR_FULL_SELECT=false` |
+| --- | --- | --- |
+| **sin `limite`** (o `?limite=`) | Pide **todas** las filas a DataGov | Pide hasta `LIMITE_MAXIMO_SELECT` |
+| `?limite=N` dentro del rango | Pide N filas | Pide N filas |
+| `?limite=0` o `> LIMITE_MAXIMO_SELECT` | **422** (fuera de rango) | **422** (fuera de rango) |
+
+### Ojo: hay dos capas (ValleData y DataGov)
+
+Como estos endpoints son pass-through, la petición pasa por **dos controles**: primero el de
+ValleData (con estas variables), y luego el de DataGov (con las suyas). El límite efectivo es
+**el más restrictivo de los dos**.
+
+- La barrera que protege el costo de **BigQuery** vive en **DataGov** (es quien ejecuta la
+  consulta): aunque ValleData permita full select, DataGov puede toparlo.
+- Las variables de ValleData sirven como **primer filtro** para sus propios consumidores
+  (los portales CKAN) y como defensa en profundidad.
+
+> Ejemplo: `GET /api/v1/consume/dataset_valledata/gold_cultivos_valle_geo?limite=100`
+> pide 100 filas a DataGov. Sin `limite`, pide todas (o hasta el máximo, según el flag).
+
+---
+
 ## 1. Requisitos (se instalan una sola vez en tu máquina)
 
 | Herramienta | Para qué sirve |
