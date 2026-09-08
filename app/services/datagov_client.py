@@ -18,7 +18,7 @@ from app.config import get_settings
 class ClienteDataGov(Protocol):
     """Contrato: cualquier cliente de DataGov sabe traer un dataset por su nombre."""
 
-    def obtener_dataset(self, tabla: str, limite: int) -> dict:
+    def obtener_dataset(self, tabla: str, limite: int | None) -> dict:
         ...
 
 
@@ -49,7 +49,7 @@ class ClienteDataGovFalso:
         ],
     }
 
-    def obtener_dataset(self, tabla: str, limite: int) -> dict:
+    def obtener_dataset(self, tabla: str, limite: int | None) -> dict:
         filas = self._EJEMPLOS_POR_TABLA.get(tabla, [])[:limite]
         return {
             "identificador": tabla,
@@ -72,15 +72,17 @@ class ClienteDataGovHTTP:
             timeout=s.datagov_timeout_segundos,
         )
 
-    def obtener_dataset(self, tabla: str, limite: int) -> dict:
+    def obtener_dataset(self, tabla: str, limite: int | None) -> dict:
         import httpx
 
         from app.errors import ErrorDataGovNoDisponible, ErrorDataGovRespuesta
 
+        # Si no hay limite, no enviamos el parametro: DataGov devuelve todas las filas.
+        params = {} if limite is None else {"limite": limite}
         try:
             respuesta = self._cliente.get(
                 f"/api/v1/expose/dataset_valledata/{tabla}",
-                params={"limite": limite},
+                params=params,
             )
             respuesta.raise_for_status()
         except httpx.HTTPStatusError as e:

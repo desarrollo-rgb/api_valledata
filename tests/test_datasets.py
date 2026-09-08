@@ -32,6 +32,27 @@ def test_los_4_datasets_reexponen_datos_falsos():
         assert set(cuerpo["filas"][0]) == columnas, tabla
 
 
+def test_sin_limite_trae_todos():
+    # Sin el parametro `limite` se devuelven todas las filas (el falso tiene 2 por tabla).
+    respuesta = cliente.get(f"{BASE}/gold_cultivos_valle_geo", headers=CABECERA_VALIDA)
+    assert respuesta.status_code == 200
+    assert respuesta.json()["total_devuelto"] == 2
+
+
+def test_sin_full_select_topa_en_maximo(monkeypatch):
+    # Con PERMITIR_FULL_SELECT=false y sin `limite`, se topa en LIMITE_MAXIMO_SELECT.
+    # El falso tiene 2 filas por tabla; fijamos el maximo en 1.
+    monkeypatch.setenv("PERMITIR_FULL_SELECT", "false")
+    monkeypatch.setenv("LIMITE_MAXIMO_SELECT", "1")
+    get_settings.cache_clear()
+    try:
+        respuesta = cliente.get(f"{BASE}/gold_cultivos_valle_geo", headers=CABECERA_VALIDA)
+        assert respuesta.status_code == 200
+        assert respuesta.json()["total_devuelto"] == 1
+    finally:
+        get_settings.cache_clear()
+
+
 def test_respeta_el_limite():
     respuesta = cliente.get(f"{BASE}/gold_cultivos_valle_geo?limite=1", headers=CABECERA_VALIDA)
     assert respuesta.status_code == 200

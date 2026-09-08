@@ -19,6 +19,15 @@ class Settings(BaseSettings):
     # fallar al arrancar que quedar sin proteccion por un olvido (fail closed).
     api_token: str
 
+    # --- Limites de consulta ---
+    # Rango permitido para el parametro `limite`, y si se permite el "full select"
+    # (traer todo sin limite). Configurables por entorno; cambiarlos solo requiere reiniciar.
+    limite_minimo_select: int = 1
+    limite_maximo_select: int = 1000000
+    # True  -> sin `limite` se devuelven TODAS las filas.
+    # False -> sin `limite` se topa en LIMITE_MAXIMO_SELECT.
+    permitir_full_select: bool = True
+
     # --- Cliente hacia la API DataGov (Flujo 1: consumir datos) ---
     # True  -> datos de ejemplo, sin llamar a DataGov (desarrollo y pruebas sin red).
     # False -> llama a la API DataGov real.

@@ -20,6 +20,18 @@ modo de desarrollo). Pensada para quien configura y despliega el servicio.
 
 ---
 
+## Límites de consulta
+
+| Variable | Qué hace | Obligatoria | 🔒 | Valor real a usar |
+| --- | --- | :---: | :---: | --- |
+| `LIMITE_MINIMO_SELECT` | Valor mínimo aceptado en el parámetro `limite` de los endpoints. | No (por defecto 1) | | `1` |
+| `LIMITE_MAXIMO_SELECT` | Valor máximo aceptado en el parámetro `limite`. | No (por defecto 1000000) | | `1000000` |
+| `PERMITIR_FULL_SELECT` | `true` = sin `limite` se piden TODAS las filas; `false` = sin `limite` se topa en `LIMITE_MAXIMO_SELECT`. | No (por defecto true) | | `true` |
+
+> Se leen al arrancar: cambiarlos solo requiere **reiniciar** el servicio, no re-desplegar.
+
+---
+
 ## Flujo 1 — cliente hacia la API DataGov (cultivos)
 
 | Variable | Qué hace | Obligatoria | 🔒 | Valor real a usar |
@@ -72,6 +84,11 @@ responde `502`.
 ```dotenv
 # Seguridad
 API_TOKEN=<secreto: openssl rand -hex 32>
+
+# Limites de consulta
+LIMITE_MINIMO_SELECT=1
+LIMITE_MAXIMO_SELECT=1000000
+PERMITIR_FULL_SELECT=true
 
 # Flujo 1 — cliente hacia DataGov
 USAR_DATAGOV_FALSO=false
