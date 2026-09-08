@@ -19,6 +19,9 @@ Este README cubre cómo **instalar, configurar, correr y contribuir**.
 | `GET /health` | Liveness: `{"status": "alive"}`. Para la plataforma. | No |
 | `GET /ready` | Readiness: revisa que PostgreSQL responda. `200` o `503`. | No |
 | `GET /api/v1/consume/dataset_valledata/gold_cultivos_valle_geo` | Cultivos que ValleData obtuvo de DataGov (Flujo 1). Parámetro `limite` (1–1000). | **Sí** |
+| `GET /api/v1/consume/dataset_valledata/gold_modelo_rendimiento` | Modelo de rendimiento que ValleData obtuvo de DataGov. Parámetro `limite` (1–1000). | **Sí** |
+| `GET /api/v1/consume/dataset_valledata/gold_pronostico_produccion` | Pronóstico de producción que ValleData obtuvo de DataGov. Parámetro `limite` (1–1000). | **Sí** |
+| `GET /api/v1/consume/dataset_valledata/gold_comentarios_sentimiento` | Sentimiento de comentarios que ValleData obtuvo de DataGov. Parámetro `limite` (1–1000). | **Sí** |
 | `GET /api/v1/expose/bd_ckan/comments` | Comentarios de los 14 portales CKAN, con `municipios_con_error` (Flujo 2). | **Sí** |
 
 **Convención de la URL** — después de `/api/v1/` va un verbo que indica la dirección del dato:

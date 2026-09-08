@@ -28,6 +28,15 @@ class ErrorDataGovRespuesta(Exception):
     """DataGov respondio, pero con un codigo de error (4xx/5xx)."""
 
 
+class ErrorPostgresNoDisponible(Exception):
+    """No se pudo leer NINGUNA base PostgreSQL (fuente totalmente caida).
+
+    Es distinto de un fallo parcial: si algunas bases responden, se devuelven esos
+    comentarios con `municipios_con_error`. Esto es cuando fallan TODAS (p. ej. el tunel
+    caido o credenciales malas): un problema de dependencia/infra, por eso es un 502.
+    """
+
+
 def registrar_manejadores_errores(app: FastAPI) -> None:
     """Conecta los manejadores de error a la aplicacion (se llama desde main.py)."""
 
@@ -47,6 +56,15 @@ def registrar_manejadores_errores(app: FastAPI) -> None:
         return JSONResponse(
             status_code=status.HTTP_502_BAD_GATEWAY,
             content={"detail": "La API DataGov respondio con un error."},
+        )
+
+    @app.exception_handler(ErrorPostgresNoDisponible)
+    async def _postgres_no_disponible(request: Request, exc: ErrorPostgresNoDisponible):
+        # 502: la fuente de comentarios (todas las bases) esta caida. El detalle va al log.
+        logger.warning("PostgreSQL no disponible: %s", exc)
+        return JSONResponse(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            content={"detail": "No se pudieron leer los comentarios. Intenta mas tarde."},
         )
 
     @app.exception_handler(Exception)

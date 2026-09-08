@@ -47,8 +47,8 @@ INFO:  10.0.0.5 - "GET /api/v1/expose/bd_ckan/comments HTTP/1.1" 200
 | 2 | Token equivocado | **401** | `"No autorizado"` | Línea de acceso `... 401` | 🟡 Mal consumo |
 | 3 | `?limite=0` (o > 1000) en cultivos | **422** | detalle de validación | Línea de acceso `... 422` | 🟡 Mal consumo |
 | 4 | Ruta que no existe | **404** | `"Not Found"` | Línea de acceso `... 404` | 🟡 Mal consumo |
-| 5 | 1 municipio de PostgreSQL falla | **200** | `municipios_con_error: ["ulloa"]` | `WARNING: No se pudieron leer los comentarios de ulloa: connection timeout` | 🔵 Dependencia/infra |
-| 6 | Túnel caído / servidor inaccesible (fallan las 14) | **200** | `total: 0`, `municipios_con_error: [14 nombres]` | 14 líneas `WARNING: No se pudieron leer los comentarios de ...: server closed the connection` | 🔵 Infra |
+| 5 | Falla 1 municipio (pero otros responden) | **200** | `municipios_con_error: ["ulloa"]` | `WARNING: No se pudieron leer los comentarios de ulloa: connection timeout` | 🔵 Dependencia/infra |
+| 6 | Fallan TODAS las bases (túnel caído / servidor inaccesible) | **502** | `"No se pudieron leer los comentarios. Intenta más tarde."` | 14 líneas `WARNING: No se pudieron leer los comentarios de ...` + `WARNING: PostgreSQL no disponible: fallaron las 14 bases` | 🔵 Infra |
 | 7 | DataGov caído (al pedir cultivos) | **502** | `"No se pudo contactar a la API DataGov. Intenta más tarde."` | `WARNING: DataGov no disponible: [Errno 111] Connection refused` | 🔵 Dependencia |
 | 8 | DataGov responde con error (p. ej. 500) | **502** | `"La API DataGov respondió con un error."` | `WARNING: DataGov respondio con error: codigo 500` | 🔵 Dependencia |
 | 9 | `DATAGOV_API_TOKEN` no coincide con el de DataGov | **502** | `"La API DataGov respondió con un error."` | `WARNING: DataGov respondio con error: codigo 401` | 🟡 Mala config |
@@ -66,4 +66,6 @@ INFO:  10.0.0.5 - "GET /api/v1/expose/bd_ckan/comments HTTP/1.1" 200
 - **Fallos parciales de datos se informan, no se ocultan:** si una base de un municipio no
   responde, sus comentarios no vienen, pero los demás sí, y su nombre aparece en
   `municipios_con_error`. El motivo exacto queda en el log.
+- **Fallo total = dependencia, no éxito vacío:** si fallan TODAS las bases, no se devuelve
+  un `200` con datos vacíos, sino un `502` (la fuente está caída).
 - **Nunca se escribe en las bases:** el acceso a PostgreSQL es de solo lectura.

@@ -161,6 +161,15 @@ class ComentariosRepoPostgres:
                 logger.warning("No se pudieron leer los comentarios de %s: %s", municipio, e)
                 municipios_con_error.append(municipio)
 
+        # Si fallaron TODAS las bases, no es un fallo parcial: la fuente esta caida.
+        # Avisamos como dependencia (502), en vez de devolver un 200 con datos vacios.
+        if s.postgres_databases and len(municipios_con_error) == len(s.postgres_databases):
+            from app.errors import ErrorPostgresNoDisponible
+
+            raise ErrorPostgresNoDisponible(
+                f"fallaron las {len(municipios_con_error)} bases"
+            )
+
         return comentarios, municipios_con_error
 
 

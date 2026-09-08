@@ -1,8 +1,9 @@
 from fastapi.testclient import TestClient
 
 from app.config import get_settings
+from app.errors import ErrorPostgresNoDisponible
 from app.main import app
-from app.services.comentarios_repo import _parsear_texto
+from app.services.comentarios_repo import _parsear_texto, get_comentarios_repo
 
 cliente = TestClient(app)
 CABECERA_VALIDA = {"Authorization": f"Bearer {get_settings().api_token}"}
@@ -60,6 +61,21 @@ def test_comentarios_desde_vacio_trae_todos():
 def test_comentarios_desde_invalido_da_422():
     respuesta = cliente.get("/api/v1/expose/bd_ckan/comments?desde=ayer", headers=CABECERA_VALIDA)
     assert respuesta.status_code == 422
+
+
+def test_comentarios_si_fuente_totalmente_caida_da_502():
+    # Si fallan TODAS las bases, el repo lanza ErrorPostgresNoDisponible y el manejador
+    # debe traducirlo a un 502 limpio, no a un 500.
+    class RepoQueFalla:
+        def obtener_comentarios(self, desde=None):
+            raise ErrorPostgresNoDisponible("fallaron las 14 bases")
+
+    app.dependency_overrides[get_comentarios_repo] = lambda: RepoQueFalla()
+    try:
+        respuesta = cliente.get("/api/v1/expose/bd_ckan/comments", headers=CABECERA_VALIDA)
+        assert respuesta.status_code == 502
+    finally:
+        app.dependency_overrides.clear()
 
 
 def test_ids_se_repiten_entre_municipios():
