@@ -12,7 +12,7 @@ from app.services.datagov_client import ClienteDataGov, get_cliente_datagov
 
 # La dependencia va en el router: protege TODOS los endpoints de datasets de una vez.
 router = APIRouter(
-    prefix="/api/v1/dataset_valledata",
+    prefix="/api/v1/consume/dataset_valledata",
     tags=["dataset Valledata"],
     dependencies=[Depends(verificar_token)],
 )

@@ -34,7 +34,7 @@ O desde la consola de GCP: **Logging → Logs Explorer**, filtrando por el servi
 Además, uvicorn escribe una línea por cada petición con su código, por ejemplo:
 
 ```
-INFO:  10.0.0.5 - "GET /api/v1/bd_ckan/comments HTTP/1.1" 200
+INFO:  10.0.0.5 - "GET /api/v1/expose/bd_ckan/comments HTTP/1.1" 200
 ```
 
 ---

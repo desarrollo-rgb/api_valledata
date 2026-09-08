@@ -18,8 +18,12 @@ Este README cubre cómo **instalar, configurar, correr y contribuir**.
 | --- | --- | --- |
 | `GET /health` | Liveness: `{"status": "alive"}`. Para la plataforma. | No |
 | `GET /ready` | Readiness: revisa que PostgreSQL responda. `200` o `503`. | No |
-| `GET /api/v1/dataset_valledata/gold_cultivos_valle_geo` | Cultivos que ValleData obtuvo de DataGov (Flujo 1). Parámetro `limite` (1–1000). | **Sí** |
-| `GET /api/v1/bd_ckan/comments` | Comentarios de los 14 portales CKAN, con `municipios_con_error` (Flujo 2). | **Sí** |
+| `GET /api/v1/consume/dataset_valledata/gold_cultivos_valle_geo` | Cultivos que ValleData obtuvo de DataGov (Flujo 1). Parámetro `limite` (1–1000). | **Sí** |
+| `GET /api/v1/expose/bd_ckan/comments` | Comentarios de los 14 portales CKAN, con `municipios_con_error` (Flujo 2). | **Sí** |
+
+**Convención de la URL** — después de `/api/v1/` va un verbo que indica la dirección del dato:
+- **`expose`**: datos que ValleData **expone** desde su propia fuente (PostgreSQL de los portales CKAN).
+- **`consume`**: datos que ValleData **consume** de otra API (DataGov) y reexpone.
 
 **Documentación interactiva** (Swagger) cuando el servidor está arriba: http://localhost:8001/docs
 
@@ -279,7 +283,7 @@ POSTGRES_USER=<usuario-de-bd>
 POSTGRES_PASSWORD=<contraseña-de-bd>
 ```
 
-**7. Levanta el API en otra terminal** y prueba `GET /api/v1/bd_ckan/comments`.
+**7. Levanta el API en otra terminal** y prueba `GET /api/v1/expose/bd_ckan/comments`.
 
 > **Al terminar tu sesión:** cierra el `port-forward` con `Ctrl + C` y borra el pod temporal:
 > ```bash
@@ -300,13 +304,13 @@ Los endpoints de datos exigen un **token** en la cabecera `Authorization: Bearer
 Sin token → **401**:
 
 ```bash
-curl -i "http://localhost:8001/api/v1/bd_ckan/comments"
+curl -i "http://localhost:8001/api/v1/expose/bd_ckan/comments"
 ```
 
 Con el token → **200 + datos**:
 
 ```bash
-curl -i -H "Authorization: Bearer TU_TOKEN" "http://localhost:8001/api/v1/bd_ckan/comments"
+curl -i -H "Authorization: Bearer TU_TOKEN" "http://localhost:8001/api/v1/expose/bd_ckan/comments"
 ```
 
 Desde el navegador: entra a http://localhost:8001/docs, pulsa **Authorize** 🔒, pega el

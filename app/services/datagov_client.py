@@ -62,7 +62,7 @@ class ClienteDataGovHTTP:
 
         try:
             respuesta = self._cliente.get(
-                "/api/v1/dataset_valledata/gold_cultivos_valle_geo",
+                "/api/v1/expose/dataset_valledata/gold_cultivos_valle_geo",
                 params={"limite": limite},
             )
             respuesta.raise_for_status()

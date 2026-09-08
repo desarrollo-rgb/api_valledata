@@ -15,6 +15,7 @@ Detalles importantes que exige la realidad de CKAN:
 
 import json
 import logging
+from datetime import datetime, timezone
 from typing import Protocol
 
 from app.config import get_settings
@@ -24,10 +25,36 @@ logger = logging.getLogger("valledata")
 
 
 class ComentariosRepo(Protocol):
-    """Contrato: entrega los comentarios y la lista de municipios que fallaron."""
+    """Contrato: entrega los comentarios y la lista de municipios que fallaron.
 
-    def obtener_comentarios(self) -> tuple[list[Comentario], list[str]]:
+    `desde` filtra por fecha de creacion: si viene, solo se devuelven los comentarios
+    con `created >= desde`; si es None, se devuelven todos.
+    """
+
+    def obtener_comentarios(
+        self, desde: datetime | None = None
+    ) -> tuple[list[Comentario], list[str]]:
         ...
+
+
+def _a_utc_naive(dt: datetime) -> datetime:
+    """Normaliza un datetime a UTC sin zona horaria.
+
+    Asi podemos comparar fechas con y sin zona de forma consistente. La columna
+    `created` de CKAN se guarda en UTC sin zona, por eso este es el formato de referencia.
+    """
+    if dt.tzinfo is not None:
+        return dt.astimezone(timezone.utc).replace(tzinfo=None)
+    return dt
+
+
+def _fecha_es_mayor_o_igual(fecha_iso: str, desde: datetime) -> bool:
+    """True si `fecha_iso` (string ISO) es >= `desde`. Si no se puede parsear, la incluye."""
+    try:
+        dt = datetime.fromisoformat(fecha_iso)
+    except (ValueError, TypeError):
+        return True  # ante la duda, no descartamos el comentario
+    return _a_utc_naive(dt) >= desde
 
 
 def _parsear_texto(valor: str | None) -> tuple[str | None, str | None]:
@@ -61,26 +88,38 @@ class ComentariosRepoFalso:
         {"id": 1, "municipio": "guacari", "dataset_id": "d-300", "usuario": "pedro", "texto_es": "El archivo no abre", "texto_en": "The file won't open", "fecha": "2026-08-19T14:00:00Z"},
     ]
 
-    def obtener_comentarios(self) -> tuple[list[Comentario], list[str]]:
+    def obtener_comentarios(
+        self, desde: datetime | None = None
+    ) -> tuple[list[Comentario], list[str]]:
         comentarios = [Comentario(**c) for c in self._COMENTARIOS]
+        if desde is not None:
+            comentarios = [c for c in comentarios if _fecha_es_mayor_o_igual(c.fecha, desde)]
         return comentarios, []  # ningun municipio con error en modo falso
 
 
 class ComentariosRepoPostgres:
     """Lee los comentarios reales de las 14 bases PostgreSQL (solo lectura)."""
 
-    _CONSULTA = """
-        SELECT id, "package_Id", comment, user_id, created
-        FROM public.comments
-        ORDER BY id
-    """
+    # SELECT base. El WHERE por fecha se agrega solo si llega `desde`. El nombre de la
+    # tabla/columnas es constante (fuente confiable); el valor de `desde` va SIEMPRE como
+    # parametro (nunca pegado al SQL), para evitar inyeccion.
+    _SELECT = 'SELECT id, "package_Id", comment, user_id, created FROM public.comments'
 
-    def obtener_comentarios(self) -> tuple[list[Comentario], list[str]]:
+    def obtener_comentarios(
+        self, desde: datetime | None = None
+    ) -> tuple[list[Comentario], list[str]]:
         import psycopg
 
         s = get_settings()
         comentarios: list[Comentario] = []
         municipios_con_error: list[str] = []
+
+        if desde is None:
+            consulta = f"{self._SELECT} ORDER BY id"
+            parametros: tuple = ()
+        else:
+            consulta = f"{self._SELECT} WHERE created >= %s ORDER BY id"
+            parametros = (desde,)
 
         for base in s.postgres_databases:
             municipio = base.removeprefix("ckan_")
@@ -99,7 +138,7 @@ class ComentariosRepoPostgres:
                     # los portales.
                     conexion.read_only = True
                     with conexion.cursor() as cursor:
-                        cursor.execute(self._CONSULTA)
+                        cursor.execute(consulta, parametros)
                         for id_, package_id, texto, usuario, creado in cursor.fetchall():
                             texto_es, texto_en = _parsear_texto(texto)
                             comentarios.append(
