@@ -22,7 +22,7 @@ Este README cubre cómo **instalar, configurar, correr y contribuir**.
 | `GET /api/v1/consume/dataset_valledata/gold_modelo_rendimiento` | Modelo de rendimiento que ValleData obtuvo de DataGov. Parámetro `limite` (1–1.000.000; vacío = todas). | **Sí** |
 | `GET /api/v1/consume/dataset_valledata/gold_pronostico_produccion` | Pronóstico de producción que ValleData obtuvo de DataGov. Parámetro `limite` (1–1.000.000; vacío = todas). | **Sí** |
 | `GET /api/v1/consume/dataset_valledata/gold_comentarios_sentimiento` | Sentimiento de comentarios que ValleData obtuvo de DataGov. Parámetro `limite` (1–1.000.000; vacío = todas). | **Sí** |
-| `GET /api/v1/expose/bd_ckan/comments` | Comentarios de los 14 portales CKAN, con `municipios_con_error` (Flujo 2). | **Sí** |
+| `GET /api/v1/expose/bd_ckan/comments` | Comentarios de los 14 portales CKAN, con `municipios_con_error` (Flujo 2). Parámetro opcional `desde` (fecha ISO 8601) para filtrar `created >= desde`. | **Sí** |
 
 **Convención de la URL** — después de `/api/v1/` va un verbo que indica la dirección del dato:
 - **`expose`**: datos que ValleData **expone** desde su propia fuente (PostgreSQL de los portales CKAN).
@@ -82,6 +82,29 @@ ValleData (con estas variables), y luego el de DataGov (con las suyas). El lími
 
 > Ejemplo: `GET /api/v1/consume/dataset_valledata/gold_cultivos_valle_geo?limite=100`
 > pide 100 filas a DataGov. Sin `limite`, pide todas (o hasta el máximo, según el flag).
+
+---
+
+## Filtro por fecha en comentarios (`desde`)
+
+El endpoint `expose/bd_ckan/comments` acepta un parámetro opcional **`desde`** para traer
+solo los comentarios creados desde una fecha en adelante (`created >= desde`).
+
+| Petición | Resultado |
+| --- | --- |
+| **sin `desde`** (o `?desde=`) | Todos los comentarios |
+| `?desde=2026-07-29` | Desde ese día (00:00) en adelante |
+| `?desde=2026-07-29T23:58:33Z` | Desde esa fecha y hora exacta |
+| `?desde=<formato inválido>` | **422** |
+
+Acepta **ISO 8601**: fecha sola (`2026-07-29`) o fecha y hora (`2026-07-29T23:58:33Z`, con
+o sin zona). El filtro se **empuja a PostgreSQL** (`WHERE created >= %s`, parametrizado —
+sin riesgo de inyección) y se aplica **por igual a las 14 bases**. Internamente las fechas
+se normalizan a UTC para comparar de forma consistente con la columna `created` de CKAN.
+
+> Ejemplo: `GET /api/v1/expose/bd_ckan/comments?desde=2026-07-29`
+>
+> Este mismo parámetro es el que DataGov reenvía cuando el DAG pide comentarios por fecha.
 
 ---
 

@@ -46,6 +46,7 @@ INFO:  10.0.0.5 - "GET /api/v1/expose/bd_ckan/comments HTTP/1.1" 200
 | 1 | Llamada sin token | **401** | `"No autorizado"` | Línea de acceso `... 401` | 🟡 Mal consumo |
 | 2 | Token equivocado | **401** | `"No autorizado"` | Línea de acceso `... 401` | 🟡 Mal consumo |
 | 3 | `?limite=0` (o > 1.000.000) en un dataset | **422** | detalle de validación | Línea de acceso `... 422` | 🟡 Mal consumo |
+| 3b | `?desde=<fecha inválida>` en comentarios | **422** | `"Parametro 'desde' invalido..."` | Línea de acceso `... 422` | 🟡 Mal consumo |
 | 4 | Ruta que no existe | **404** | `"Not Found"` | Línea de acceso `... 404` | 🟡 Mal consumo |
 | 5 | Falla 1 municipio (pero otros responden) | **200** | `municipios_con_error: ["ulloa"]` | `WARNING: No se pudieron leer los comentarios de ulloa: connection timeout` | 🔵 Dependencia/infra |
 | 6 | Fallan TODAS las bases (túnel caído / servidor inaccesible) | **502** | `"No se pudieron leer los comentarios. Intenta más tarde."` | 14 líneas `WARNING: No se pudieron leer los comentarios de ...` + `WARNING: PostgreSQL no disponible: fallaron las 14 bases` | 🔵 Infra |
