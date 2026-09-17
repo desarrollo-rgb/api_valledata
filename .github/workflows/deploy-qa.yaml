@@ -47,13 +47,25 @@ jobs:
       # -----------------------------------------------------------------
       # Build + push — cloudbuild.yaml solo hace esto (2 steps fijos), un
       # único tag inmutable (el SHA del commit), sin :latest.
-      # -----------------------------------------------------------------
+      #
+      # --gcs-source-staging-dir explícito es OBLIGATORIO acá: sin él,
+      # "gcloud builds submit" hace un GET a nivel de PROYECTO
+      # (storage.buckets.list) para decidir si el bucket de staging existe,
+      # y ese permiso no se puede otorgar scoped a un bucket puntual (es una
+      # operación de listado sobre el proyecto) — solo con un storage.admin
+      # de TODO el proyecto (el mismo antipatrón que ya tiene CKAN, que por
+      # eso no lo sufre). Con el flag explícito, gcloud se salta ese
+      # chequeo y solo necesita permisos sobre el bucket puntual
+      # (co-valledata-prd_cloudbuild), que es justamente lo que tiene este
+      # SA. Confirmado reproduciendo el fallo localmente con
+      # --verbosity=debug e impersonando este mismo SA.
       - name: Submit build to Cloud Build
         run: |
           gcloud builds submit . \
             --project=co-valledata-prd \
             --region=us-east1 \
             --config=cloudbuild.yaml \
+            --gcs-source-staging-dir=gs://co-valledata-prd_cloudbuild/source \
             --substitutions=_TAG=${{ github.sha }},_REGISTRY=${{ env.REGISTRY }}
 
       # -----------------------------------------------------------------
