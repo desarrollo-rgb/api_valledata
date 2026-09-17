@@ -1,0 +1,40 @@
+# Control de versiones
+.git/
+.gitignore
+
+# Entornos virtuales
+.venv/
+venv/
+env/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Secretos y configuracion local (nunca deben llegar al build context)
+.env
+.env.*
+!.env.example
+*-sa.json
+credentials*.json
+
+# No hace falta en la imagen de runtime
+tests/
+apis-externas/
+*.md
+
+# Editores / SO
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini
+
+# La propia imagen no debe copiarse a si misma
+Dockerfile
+.dockerignore

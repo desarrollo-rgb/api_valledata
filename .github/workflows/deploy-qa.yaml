@@ -1,0 +1,114 @@
+name: Deploy to qa
+
+# Único ambiente real hoy (dev fue dado de baja) — dispara en push a
+# develop, la única rama de trabajo real de este repo. No hay una rama "qa"
+# artificial: ver docs/planes/2026-09-13-cicd-api-valledata-qa.md.
+
+on:
+  push:
+    branches: [develop]
+
+jobs:
+  build-and-deploy:
+    name: Build, push y deploy en QA
+    runs-on: ubuntu-latest
+    environment: qa
+    permissions:
+      id-token: write   # requerido por Workload Identity Federation
+      contents: read
+
+    env:
+      REGISTRY: us-east1-docker.pkg.dev/co-valledata-prd/api-images
+      DEVOPS_REPO: desarrollo-rgb/datosabiertos-devops
+      GKE_NAMESPACE: valledata
+
+    steps:
+      - name: Checkout api_valledata
+        uses: actions/checkout@v4
+
+      # -----------------------------------------------------------------
+      # Auth vía Workload Identity Federation — sin claves de service
+      # account. WIF_PROVIDER/GCP_SA_EMAIL vienen del GitHub Environment
+      # "qa" (outputs de la Fase 1 del plan: wif_provider y
+      # valledata_github_actions_sa_email).
+      # -----------------------------------------------------------------
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_SA_EMAIL }}
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Install gke-gcloud-auth-plugin
+        run: gcloud components install gke-gcloud-auth-plugin --quiet
+
+      # -----------------------------------------------------------------
+      # Build + push — cloudbuild.yaml solo hace esto (2 steps fijos), un
+      # único tag inmutable (el SHA del commit), sin :latest.
+      # -----------------------------------------------------------------
+      - name: Submit build to Cloud Build
+        run: |
+          gcloud builds submit . \
+            --project=co-valledata-prd \
+            --region=us-east1 \
+            --config=cloudbuild.yaml \
+            --substitutions=_TAG=${{ github.sha }},_REGISTRY=${{ env.REGISTRY }}
+
+      # -----------------------------------------------------------------
+      # Commit-back del tag nuevo al overlay de Kustomize de
+      # datosabiertos-devops — git siempre refleja lo que corre, a
+      # diferencia de "kubectl set image" al margen de git (antipatrón de
+      # CKAN). Requiere un token con permiso de escritura SOLO sobre este
+      # repo (secret DEVOPS_REPO_TOKEN del GitHub Environment "qa") — el
+      # GITHUB_TOKEN por defecto no alcanza a otro repo.
+      # -----------------------------------------------------------------
+      - name: Checkout datosabiertos-devops
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.DEVOPS_REPO }}
+          ref: develop
+          token: ${{ secrets.DEVOPS_REPO_TOKEN }}
+          path: datosabiertos-devops
+
+      - name: Update image tag in Kustomize overlay
+        working-directory: datosabiertos-devops
+        run: |
+          yq -i '(.images[] | select(.name == "api-valledata") | .newTag) = "${{ github.sha }}"' \
+            k8s/environments/qa/valledata/kustomization.yaml
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add k8s/environments/qa/valledata/kustomization.yaml
+          git commit -m "deploy(valledata): actualiza tag a ${{ github.sha }}"
+          git push origin develop
+
+      # -----------------------------------------------------------------
+      # Apply contra el commit recién pusheado, en los dos clusters de qa
+      # (mismo overlay, cluster-agnóstico). Sin allowFailure ni "|| echo":
+      # si el rollout falla, el job falla en rojo — cierra el antipatrón
+      # de CKAN de silenciar fallos de rollout.
+      # -----------------------------------------------------------------
+      - name: Get gke-primary credentials
+        uses: google-github-actions/get-gke-credentials@v2
+        with:
+          cluster_name: gke-primary
+          location: us-east1
+          project_id: co-valledata-prd
+
+      - name: Apply + rollout status (gke-primary)
+        run: |
+          kubectl apply -k datosabiertos-devops/k8s/environments/qa/valledata
+          kubectl rollout status deployment/api-valledata -n ${{ env.GKE_NAMESPACE }} --timeout=5m
+
+      - name: Get gke-dr credentials
+        uses: google-github-actions/get-gke-credentials@v2
+        with:
+          cluster_name: gke-dr
+          location: us-central1
+          project_id: co-valledata-prd
+
+      - name: Apply + rollout status (gke-dr)
+        run: |
+          kubectl apply -k datosabiertos-devops/k8s/environments/qa/valledata
+          kubectl rollout status deployment/api-valledata -n ${{ env.GKE_NAMESPACE }} --timeout=5m
