@@ -1,0 +1,40 @@
+# =============================================================================
+# CLOUD BUILD — api_valledata: build + push únicamente.
+# =============================================================================
+#
+# A diferencia de datosabiertos-ckan/cloudbuild.yaml, este archivo NO hace
+# deploy — evita a propósito el antipatrón de CKAN de desplegar con
+# "kubectl set image" al margen de git dentro de Cloud Build (ver
+# docs/informes/antipatrones-cicd-ckan.md del repo datosabiertos-devops). El
+# deploy real (commit-back del tag al overlay de Kustomize + kubectl apply -k
+# + rollout status) lo hace el workflow de GitHub Actions después de este
+# build — ver .github/workflows/deploy-qa.yaml.
+#
+# Substitutions (sin defaults a propósito: las pasa siempre el workflow):
+#   _TAG      → tag inmutable de la imagen — el SHA del commit. Sin :latest.
+#   _REGISTRY → registry + repo de destino, ej.
+#               us-east1-docker.pkg.dev/co-valledata-prd/api-images
+#
+# Disparo manual de referencia:
+#   gcloud builds submit . --config=cloudbuild.yaml \
+#     --substitutions=_TAG=$(git rev-parse HEAD),_REGISTRY=us-east1-docker.pkg.dev/co-valledata-prd/api-images
+# =============================================================================
+
+steps:
+  - id: build
+    name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -t
+      - ${_REGISTRY}/api-valledata:${_TAG}
+      - .
+
+  - id: push
+    name: gcr.io/cloud-builders/docker
+    waitFor: [build]
+    args:
+      - push
+      - ${_REGISTRY}/api-valledata:${_TAG}
+
+options:
+  logging: CLOUD_LOGGING_ONLY
