@@ -41,7 +41,11 @@ class Settings(BaseSettings):
     # False -> se conecta a las bases PostgreSQL reales.
     usar_postgres_falso: bool = True
     # Credenciales de un usuario de BD de SOLO LECTURA (nunca escribe en los portales).
-    # En produccion vienen de Secret Manager; en local, del .env.
+    # Solo postgres_password es secreto de verdad: en QA viene de Secret Manager vía
+    # ExternalSecret (ver k8s/base/valledata/external-secret.yaml en datosabiertos-devops).
+    # host/port/user no son sensibles por si solos (sin el password no dan acceso) y
+    # viven en texto plano en el ConfigMap, igual que USAR_POSTGRES_FALSO. En local,
+    # los 4 vienen del .env.
     postgres_host: str = "localhost"
     postgres_port: int = 5432
     postgres_user: str = "lector_readonly"
