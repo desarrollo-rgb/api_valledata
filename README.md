@@ -476,3 +476,15 @@ poetry add --group dev nombre        # solo para desarrollo/pruebas
 | Añadir una librería de desarrollo | `poetry add --group dev nombre` |
 | Quitar una librería | `poetry remove nombre` |
 | Ver las dependencias instaladas | `poetry show` |
+
+## 10. CI/CD
+
+- **QA**: push a `develop` dispara `.github/workflows/deploy-qa.yaml` — build
+  en Cloud Build, commit-back del tag al overlay de Kustomize de QA en
+  `datosabiertos-devops`, `kubectl apply -k` + `rollout status` en
+  `gke-primary`/`gke-dr` de `co-valledata-prd`.
+- **Producción**: push a `main` dispara `.github/workflows/deploy-prod.yaml`
+  — mismo mecanismo contra `co-valledata-pub-prd`, con el paso de despliegue
+  pausado hasta aprobación manual (GitHub Environment `prod-deploy`, ver
+  `docs/planes/2026-09-20-cicd-prod-ckan-valledata.md` del repo
+  `datosabiertos-devops`).
