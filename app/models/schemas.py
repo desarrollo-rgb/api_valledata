@@ -16,6 +16,10 @@ class Comentario(BaseModel):
     municipio: str
     # Id del dataset comentado (columna "package_Id" en la BD).
     dataset_id: str
+    # Nombre legible del dataset (columna "title" de la tabla package en CKAN). Se obtiene
+    # con un LEFT JOIN por el package_Id. Puede ser nulo si el dataset no se encontro o no
+    # tiene titulo.
+    nombre_dataset: str | None
     # Autor del comentario (columna user_id). Puede ser nulo: en CKAN los
     # comentarios pueden ser anonimos, asi que el user_id no siempre viene.
     usuario: str | None

@@ -20,6 +20,7 @@ def test_comentarios_devuelve_datos_falsos():
         "id",
         "municipio",
         "dataset_id",
+        "nombre_dataset",
         "usuario",
         "texto_es",
         "texto_en",
