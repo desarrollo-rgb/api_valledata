@@ -108,6 +108,28 @@ se normalizan a UTC para comparar de forma consistente con la columna `created` 
 
 ---
 
+## Campos de un comentario
+
+Cada elemento de `comentarios` tiene esta forma:
+
+| Campo | Tipo | Descripción |
+| --- | --- | --- |
+| `id` | int | Id del comentario **dentro de su municipio** (no es único entre municipios). |
+| `municipio` | string | Municipio de origen (derivado del nombre de la base: `ckan_alcala` → `alcala`). |
+| `dataset_id` | string | Id del dataset comentado (columna `"package_Id"` en la BD). |
+| `nombre_dataset` | string \| null | **Nombre legible del dataset** (columna `title` de la tabla `package`). |
+| `usuario` | string \| null | Autor del comentario (`user_id`). Nulo en comentarios anónimos. |
+| `texto_es` | string \| null | Texto en español (parseado del JSON multilingüe). |
+| `texto_en` | string \| null | Texto en inglés (parseado del JSON multilingüe). |
+| `fecha` | string | Fecha de creación en UTC, ISO 8601. |
+
+> **`nombre_dataset`** se obtiene con un **`LEFT JOIN`** de `public.comments` con
+> `public.package` por el `package_Id`. Es `LEFT` para no perder comentarios si el dataset
+> no existe o fue borrado: en ese caso `nombre_dataset` llega como `null`. El usuario de BD
+> necesita permiso de `SELECT` también sobre la tabla `package`.
+
+---
+
 ## 1. Requisitos (se instalan una sola vez en tu máquina)
 
 | Herramienta | Para qué sirve |
@@ -414,6 +436,9 @@ reales es solo cambiar el `.env`.
 
 - La columna del texto (`comment`) es un JSON multilingüe `{"es": "...", "en": "..."}` que
   se parsea a `texto_es` / `texto_en` (con tolerancia a texto plano en filas antiguas).
+- El **nombre del dataset** (`nombre_dataset`) no vive en `comments`: se trae con un
+  **`LEFT JOIN`** con la tabla `package` (columna `title`), por el `package_Id`. Con `LEFT`,
+  si el dataset no existe el comentario igual se devuelve con `nombre_dataset` nulo.
 - El `usuario` puede ser **nulo** (comentarios anónimos).
 - El `id` **no es único entre municipios**: la clave real es `municipio + id`.
 - **Tolerancia a fallos parciales:** si una base no responde, se registra en

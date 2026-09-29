@@ -82,10 +82,10 @@ class ComentariosRepoFalso:
     """
 
     _COMENTARIOS: list[dict] = [
-        {"id": 1, "municipio": "alcala", "dataset_id": "d-100", "usuario": "ana", "texto_es": "Buen conjunto de datos", "texto_en": "Good dataset", "fecha": "2026-08-20T10:00:00Z"},
-        {"id": 2, "municipio": "alcala", "dataset_id": "d-100", "usuario": "luis", "texto_es": "Faltan los datos de 2025", "texto_en": "2025 data is missing", "fecha": "2026-08-20T11:30:00Z"},
-        {"id": 1, "municipio": "cerrito", "dataset_id": "d-200", "usuario": "sara", "texto_es": "Muy util, gracias", "texto_en": "Very useful, thanks", "fecha": "2026-08-21T09:15:00Z"},
-        {"id": 1, "municipio": "guacari", "dataset_id": "d-300", "usuario": "pedro", "texto_es": "El archivo no abre", "texto_en": "The file won't open", "fecha": "2026-08-19T14:00:00Z"},
+        {"id": 1, "municipio": "alcala", "dataset_id": "d-100", "nombre_dataset": "Cultivos del Valle 2026", "usuario": "ana", "texto_es": "Buen conjunto de datos", "texto_en": "Good dataset", "fecha": "2026-08-20T10:00:00Z"},
+        {"id": 2, "municipio": "alcala", "dataset_id": "d-100", "nombre_dataset": "Cultivos del Valle 2026", "usuario": "luis", "texto_es": "Faltan los datos de 2025", "texto_en": "2025 data is missing", "fecha": "2026-08-20T11:30:00Z"},
+        {"id": 1, "municipio": "cerrito", "dataset_id": "d-200", "nombre_dataset": "Presupuesto municipal", "usuario": "sara", "texto_es": "Muy util, gracias", "texto_en": "Very useful, thanks", "fecha": "2026-08-21T09:15:00Z"},
+        {"id": 1, "municipio": "guacari", "dataset_id": "d-300", "nombre_dataset": None, "usuario": "pedro", "texto_es": "El archivo no abre", "texto_en": "The file won't open", "fecha": "2026-08-19T14:00:00Z"},
     ]
 
     def obtener_comentarios(
@@ -103,7 +103,14 @@ class ComentariosRepoPostgres:
     # SELECT base. El WHERE por fecha se agrega solo si llega `desde`. El nombre de la
     # tabla/columnas es constante (fuente confiable); el valor de `desde` va SIEMPRE como
     # parametro (nunca pegado al SQL), para evitar inyeccion.
-    _SELECT = 'SELECT id, "package_Id", comment, user_id, created FROM public.comments'
+    # LEFT JOIN con package: el nombre legible del dataset (p.title) no vive en comments,
+    # sino en la tabla package, ligada por el package_Id. Es LEFT para no perder comentarios
+    # si el dataset no existe o fue borrado (en ese caso p.title llega como NULL).
+    _SELECT = (
+        'SELECT c.id, c."package_Id", p.title, c.comment, c.user_id, c.created '
+        'FROM public.comments c '
+        'LEFT JOIN public.package p ON p.id = c."package_Id"'
+    )
 
     def obtener_comentarios(
         self, desde: datetime | None = None
@@ -115,10 +122,10 @@ class ComentariosRepoPostgres:
         municipios_con_error: list[str] = []
 
         if desde is None:
-            consulta = f"{self._SELECT} ORDER BY id"
+            consulta = f"{self._SELECT} ORDER BY c.id"
             parametros: tuple = ()
         else:
-            consulta = f"{self._SELECT} WHERE created >= %s ORDER BY id"
+            consulta = f"{self._SELECT} WHERE c.created >= %s ORDER BY c.id"
             parametros = (desde,)
 
         for base in s.postgres_databases:
@@ -139,13 +146,14 @@ class ComentariosRepoPostgres:
                     conexion.read_only = True
                     with conexion.cursor() as cursor:
                         cursor.execute(consulta, parametros)
-                        for id_, package_id, texto, usuario, creado in cursor.fetchall():
+                        for id_, package_id, nombre_dataset, texto, usuario, creado in cursor.fetchall():
                             texto_es, texto_en = _parsear_texto(texto)
                             comentarios.append(
                                 Comentario(
                                     id=id_,
                                     municipio=municipio,
                                     dataset_id=package_id,
+                                    nombre_dataset=nombre_dataset,
                                     usuario=usuario,
                                     texto_es=texto_es,
                                     texto_en=texto_en,
