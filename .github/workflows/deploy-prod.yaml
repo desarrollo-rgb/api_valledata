@@ -78,7 +78,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: ${{ env.DEVOPS_REPO }}
-          ref: develop
+          ref: master
           token: ${{ secrets.DEVOPS_REPO_TOKEN }}
           path: datosabiertos-devops
 
@@ -92,7 +92,7 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add k8s/environments/prod/valledata/kustomization.yaml
           git commit -m "deploy(valledata prod): actualiza tag a ${{ github.sha }}"
-          git push origin develop
+          git push origin master
 
   deploy-prod:
     name: Deploy a producción (requiere aprobación manual)
@@ -108,12 +108,12 @@ jobs:
       GKE_NAMESPACE: valledata
 
     steps:
-      # Checkout fresco de develop — ya trae el commit-back del job anterior.
+      # Checkout fresco de master — ya trae el commit-back del job anterior.
       - name: Checkout datosabiertos-devops
         uses: actions/checkout@v4
         with:
           repository: ${{ env.DEVOPS_REPO }}
-          ref: develop
+          ref: master
           token: ${{ secrets.DEVOPS_REPO_TOKEN }}
           path: datosabiertos-devops
 
