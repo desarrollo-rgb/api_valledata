@@ -80,7 +80,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: ${{ env.DEVOPS_REPO }}
-          ref: develop
+          ref: master
           token: ${{ secrets.DEVOPS_REPO_TOKEN }}
           path: datosabiertos-devops
 
@@ -93,7 +93,7 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add k8s/environments/qa/valledata/kustomization.yaml
           git commit -m "deploy(valledata): actualiza tag a ${{ github.sha }}"
-          git push origin develop
+          git push origin master
 
       # -----------------------------------------------------------------
       # Apply contra el commit recién pusheado, en los dos clusters de qa
