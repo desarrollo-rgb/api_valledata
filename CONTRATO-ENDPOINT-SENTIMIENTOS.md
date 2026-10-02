@@ -56,17 +56,49 @@ DataGov **no transforma** la respuesta: entrega el mismo JSON que le dio ValleDa
 
 ## Autenticación
 
-El endpoint exige un **Bearer token** en la cabecera:
+El endpoint está protegido: para usarlo debes enviar un **token**.
+
+**La regla es simple: solo necesitas el token de la API que estás llamando.**
+
+- ¿Llamas a **ValleData**? → usa el **token de ValleData**.
+- ¿Llamas a **DataGov**? → usa el **token de DataGov**.
+
+El token se envía en la cabecera `Authorization`, con la palabra `Bearer` adelante:
 
 ```
-Authorization: Bearer <token>
+Authorization: Bearer <token-de-la-api-que-llamas>
 ```
 
-- Cada API tiene **su propio token**. El que le presentas a ValleData es el de ValleData; el
-  que le presentas a DataGov es el de DataGov.
-- Además, por dentro, **DataGov le presenta a ValleData** su propio token de cliente. Si ese
-  token cruzado no coincide con el de ValleData, DataGov responde **502** (ver errores).
-- Token ausente o incorrecto → **401** `{"detail": "No autorizado"}`.
+Si el token falta o es incorrecto, la respuesta es **401** `{"detail": "No autorizado"}`.
+
+> **¿Y el token entre DataGov y ValleData?** No te preocupes por él. Cuando llamas a DataGov,
+> DataGov necesita a su vez un token para pedirle los comentarios a ValleData, **pero ese
+> token ya está configurado por dentro** (en las variables de entorno del servicio). Tú, como
+> consumidor, **nunca lo manejas**: solo pones el token de DataGov y DataGov se encarga del
+> resto.
+
+---
+
+## Pruébalo desde el navegador (Swagger)
+
+Cada API trae una interfaz **Swagger** para probar el endpoint sin escribir código, desde el
+navegador:
+
+| API | URL de Swagger |
+| --- | --- |
+| ValleData | `https://api-valledata.valledelcauca.gov.co/docs` |
+| DataGov | *(cuando esté desplegada)* `https://<host-datagov>/docs` |
+
+Pasos:
+
+1. Abre la URL de Swagger de la API que quieras probar.
+2. Haz clic en el botón **Authorize** (arriba a la derecha) y pega el **token de esa API**
+   (según la regla de arriba). Confirma.
+3. Busca el endpoint de comentarios, despliégalo y haz clic en **Try it out**.
+4. (Opcional) Escribe el parámetro `desde`. Si lo dejas vacío, trae todos.
+5. Haz clic en **Execute**. Verás abajo la respuesta real, con su código de estado y el JSON.
+
+> Si no haces el paso 2 (Authorize), el endpoint responderá **401**.
 
 ---
 
