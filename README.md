@@ -5,8 +5,8 @@ DataGov. Tiene dos responsabilidades:
 
 1. **Leer los comentarios** ciudadanos de los **14 portales CKAN** (una base PostgreSQL por
    municipio) y exponerlos en un endpoint propio.
-2. **Consumir los datos de cultivos** que expone DataGov (desde BigQuery) y **reexponerlos**
-   para que los portales CKAN los puedan ingerir.
+2. **Consumir las vistas de la analítica de comentarios** que expone DataGov (desde BigQuery)
+   y **reexponerlas**.
 
 Este README cubre cómo **instalar, configurar, correr y contribuir**.
 
@@ -18,11 +18,9 @@ Este README cubre cómo **instalar, configurar, correr y contribuir**.
 | --- | --- | --- |
 | `GET /health` | Liveness: `{"status": "alive"}`. Para la plataforma. | No |
 | `GET /ready` | Readiness: revisa que PostgreSQL responda. `200` o `503`. | No |
-| `GET /api/v1/consume/dataset_valledata/gold_cultivos_valle_geo` | Cultivos que ValleData obtuvo de DataGov (Flujo 1). Parámetro `limite` (1–1.000.000; vacío = todas). | **Sí** |
-| `GET /api/v1/consume/dataset_valledata/gold_modelo_rendimiento` | Modelo de rendimiento que ValleData obtuvo de DataGov. Parámetro `limite` (1–1.000.000; vacío = todas). | **Sí** |
-| `GET /api/v1/consume/dataset_valledata/gold_pronostico_produccion` | Pronóstico de producción que ValleData obtuvo de DataGov. Parámetro `limite` (1–1.000.000; vacío = todas). | **Sí** |
-| `GET /api/v1/consume/dataset_valledata/gold_comentarios_sentimiento` | Sentimiento de comentarios que ValleData obtuvo de DataGov. Parámetro `limite` (1–1.000.000; vacío = todas). | **Sí** |
-| `GET /api/v1/expose/bd_ckan/comments` | Comentarios de los 14 portales CKAN, con `municipios_con_error` (Flujo 2). Parámetro opcional `desde` (fecha ISO 8601) para filtrar `created >= desde`. | **Sí** |
+| `GET /api/v1/consume/gold_valledata/valledata_api_comentarios_detalle` | Detalle de comentarios analizados (un comentario por fila) que ValleData obtuvo de DataGov. Parámetro `limite`. | **Sí** |
+| `GET /api/v1/consume/gold_valledata/valledata_api_comentarios_resumen_dataset` | Resumen de comentarios por dataset que ValleData obtuvo de DataGov. Parámetro `limite`. | **Sí** |
+| `GET /api/v1/expose/bd_ckan/comments` | Comentarios de los 14 portales CKAN, con `municipios_con_error`. Parámetro opcional `desde` (fecha ISO 8601) para filtrar `created >= desde`. | **Sí** |
 
 **Convención de la URL** — después de `/api/v1/` va un verbo que indica la dirección del dato:
 - **`expose`**: datos que ValleData **expone** desde su propia fuente (PostgreSQL de los portales CKAN).
@@ -49,39 +47,21 @@ falso a real **no cambia ni una línea de código**, solo el `.env`.
 
 ---
 
-## El parámetro `limite` y el control de volumen
+## El parámetro `limite`
 
 Los endpoints de datasets (`consume/...`, los que ValleData obtiene de DataGov) aceptan un
-parámetro opcional **`limite`** que controla cuántas filas se devuelven. Su comportamiento
-se **configura por entorno**, sin tocar código (solo reiniciar):
+parámetro opcional **`limite`** que controla cuántas filas se piden a DataGov:
 
-| Variable | Qué hace | Por defecto |
-| --- | --- | --- |
-| `LIMITE_MINIMO_SELECT` | Valor mínimo que se acepta en `limite`. | `1` |
-| `LIMITE_MAXIMO_SELECT` | Valor máximo que se acepta en `limite`. | `1000000` |
-| `PERMITIR_FULL_SELECT` | Qué hacer cuando **no** se envía `limite`. | `true` |
+| Petición | Resultado |
+| --- | --- |
+| **sin `limite`** (o `?limite=`) | Pide **todas** las filas a DataGov |
+| `?limite=N` (N ≥ 1) | Pide N filas |
+| `?limite=0` o negativo | **422** |
 
-### Cómo se comporta
-
-| Petición | `PERMITIR_FULL_SELECT=true` | `PERMITIR_FULL_SELECT=false` |
-| --- | --- | --- |
-| **sin `limite`** (o `?limite=`) | Pide **todas** las filas a DataGov | Pide hasta `LIMITE_MAXIMO_SELECT` |
-| `?limite=N` dentro del rango | Pide N filas | Pide N filas |
-| `?limite=0` o `> LIMITE_MAXIMO_SELECT` | **422** (fuera de rango) | **422** (fuera de rango) |
-
-### Ojo: hay dos capas (ValleData y DataGov)
-
-Como estos endpoints son pass-through, la petición pasa por **dos controles**: primero el de
-ValleData (con estas variables), y luego el de DataGov (con las suyas). El límite efectivo es
-**el más restrictivo de los dos**.
-
-- La barrera que protege el costo de **BigQuery** vive en **DataGov** (es quien ejecuta la
-  consulta): aunque ValleData permita full select, DataGov puede toparlo.
-- Las variables de ValleData sirven como **primer filtro** para sus propios consumidores
-  (los portales CKAN) y como defensa en profundidad.
-
-> Ejemplo: `GET /api/v1/consume/dataset_valledata/gold_cultivos_valle_geo?limite=100`
-> pide 100 filas a DataGov. Sin `limite`, pide todas (o hasta el máximo, según el flag).
+> El `limite` se reenvía tal cual a DataGov, que es quien ejecuta la consulta en BigQuery.
+>
+> Ejemplo: `GET /api/v1/consume/gold_valledata/valledata_api_comentarios_detalle?limite=100`
+> pide 100 filas a DataGov. Sin `limite`, pide todas.
 
 ---
 
@@ -256,7 +236,7 @@ poetry run uvicorn app.main:app --reload --port 8001
 | --- | --- | --- |
 | `API_TOKEN` | Token que exige ESTA API. **Obligatorio** (si falta, no arranca). | Un valor de prueba |
 
-### Flujo 1 — cliente hacia DataGov (cultivos)
+### Cliente hacia DataGov (vistas de comentarios)
 
 | Variable | Qué es | Desarrollo (falso) |
 | --- | --- | --- |
@@ -265,7 +245,7 @@ poetry run uvicorn app.main:app --reload --port 8001
 | `DATAGOV_API_TOKEN` | Token que DataGov exige. **Debe ser idéntico al `API_TOKEN` de DataGov.** | — |
 | `DATAGOV_TIMEOUT_SEGUNDOS` | Timeout de las llamadas | `30` |
 
-### Flujo 2 — PostgreSQL (comentarios CKAN)
+### PostgreSQL (comentarios CKAN)
 
 | Variable | Qué es | Desarrollo (falso) |
 | --- | --- | --- |
@@ -415,10 +395,10 @@ api_valledata/
 │   │   └── schemas.py          # contrato de datos (Comentario)
 │   ├── api/
 │   │   ├── health.py           # GET /health y GET /ready (públicos)
-│   │   ├── datasets.py         # GET .../gold_cultivos_valle_geo (reexpone DataGov)
+│   │   ├── datasets.py         # GET .../gold_valledata/... (reexpone vistas de DataGov)
 │   │   └── comentarios.py      # GET .../comments (14 bases PostgreSQL)
 │   └── services/
-│       ├── datagov_client.py   # cómo se piden los cultivos: falso ↔ HTTP a DataGov
+│       ├── datagov_client.py   # cómo se piden las vistas: falso ↔ HTTP a DataGov
 │       └── comentarios_repo.py # de dónde salen los comentarios: falso ↔ PostgreSQL
 ├── tests/                      # pruebas (conftest.py fuerza modo falso)
 ├── .env.example                # plantilla de configuración (SÍ se versiona)
@@ -448,8 +428,8 @@ reales es solo cambiar el `.env`.
 
 ## 7. Manejo de errores
 
-- Si **DataGov está caído** o responde con error, el endpoint de cultivos devuelve un
-  **502** limpio (`"No se pudo contactar a la API DataGov"`), no un 500 con traza.
+- Si **DataGov está caído** o responde con error, el endpoint que consume sus vistas devuelve
+  un **502** limpio (`"No se pudo contactar a la API DataGov"`), no un 500 con traza.
 - Si **un municipio** de PostgreSQL falla, su nombre aparece en `municipios_con_error` y el
   resto de comentarios se devuelve igual (no se cae todo).
 - Cualquier error no previsto devuelve un **500** genérico; el detalle va al log.

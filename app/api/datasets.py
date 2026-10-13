@@ -1,89 +1,49 @@
-"""Endpoints que republican los datos de DataGov para que CKAN los ingiera (Flujo 1).
+"""Endpoints que reexponen las vistas de la analitica de comentarios de DataGov.
 
-ValleData obtiene cada dataset desde DataGov y lo expone aqui, en su propio endpoint. Es
-un pass-through (el mismo JSON). Todos van bajo `consume/` porque el dato viene de otra API
-(DataGov). El parametro `limite` se reenvia tal cual a DataGov.
+ValleData obtiene cada vista desde DataGov y la reexpone aqui (pass-through: el mismo JSON).
+Las vistas viven en el dataset `gold_valledata` de DataGov, por eso su URL usa ese nombre.
+El parametro `limite` se reenvia tal cual a DataGov.
 """
 
 from fastapi import APIRouter, Depends, Query
 
-from app.config import get_settings
 from app.security import verificar_token
 from app.services.datagov_client import ClienteDataGov, get_cliente_datagov
 
-# La dependencia va en el router: protege TODOS los endpoints de datasets de una vez.
+# La dependencia va en el router: protege TODOS los endpoints de una vez.
 router = APIRouter(
-    prefix="/api/v1/consume/dataset_valledata",
+    prefix="/api/v1/consume/gold_valledata",
     tags=["dataset Valledata"],
     dependencies=[Depends(verificar_token)],
 )
 
-# Rango del parametro `limite`, leido de la configuracion (variables LIMITE_MINIMO y
-# LIMITE_MAXIMO). Se resuelve al arrancar: cambiarlo en el .env solo requiere reiniciar.
-_s = get_settings()
+# Parametro `limite`: opcional. Vacio = todas las filas; con valor = tope de filas.
 _LIMITE = Query(
     default=None,
-    ge=_s.limite_minimo_select,
-    le=_s.limite_maximo_select,
-    description="Maximo de filas a pedir a DataGov. Vacio = todas (o el maximo, segun PERMITIR_FULL_SELECT).",
+    ge=1,
+    description="Maximo de filas a pedir a DataGov. Vacio = todas.",
 )
-
-
-def _resolver_limite(limite: int | None) -> int | None:
-    """Aplica la politica de 'full select' cuando no se especifica `limite`.
-
-    - PERMITIR_FULL_SELECT=true  -> None (se piden todas las filas).
-    - PERMITIR_FULL_SELECT=false -> se topa en LIMITE_MAXIMO_SELECT.
-    """
-    s = get_settings()
-    if limite is None and not s.permitir_full_select:
-        return s.limite_maximo_select
-    return limite
 
 
 @router.get(
-    "/gold_cultivos_valle_geo",
-    summary="Obtener información de la tabla de cultivos",
+    "/valledata_api_comentarios_detalle",
+    summary="Obtener el detalle de comentarios analizados",
 )
-async def obtener_cultivos(
+async def obtener_comentarios_detalle(
     limite: int | None = _LIMITE,
     cliente: ClienteDataGov = Depends(get_cliente_datagov),
 ) -> dict:
-    """Devuelve los datos de cultivos que ValleData obtuvo de DataGov."""
-    return cliente.obtener_dataset("gold_cultivos_valle_geo", limite=_resolver_limite(limite))
+    """Devuelve el detalle de comentarios analizados (un comentario por fila) que ValleData obtuvo de DataGov."""
+    return cliente.obtener_dataset("gold_valledata", "valledata_api_comentarios_detalle", limite=limite)
 
 
 @router.get(
-    "/gold_modelo_rendimiento",
-    summary="Obtener información de la tabla de rendimiento",
+    "/valledata_api_comentarios_resumen_dataset",
+    summary="Obtener el resumen de comentarios por dataset",
 )
-async def obtener_rendimiento(
+async def obtener_comentarios_resumen_dataset(
     limite: int | None = _LIMITE,
     cliente: ClienteDataGov = Depends(get_cliente_datagov),
 ) -> dict:
-    """Devuelve los datos del modelo de rendimiento que ValleData obtuvo de DataGov."""
-    return cliente.obtener_dataset("gold_modelo_rendimiento", limite=_resolver_limite(limite))
-
-
-@router.get(
-    "/gold_pronostico_produccion",
-    summary="Obtener información de la tabla de pronóstico de producción",
-)
-async def obtener_pronostico(
-    limite: int | None = _LIMITE,
-    cliente: ClienteDataGov = Depends(get_cliente_datagov),
-) -> dict:
-    """Devuelve los datos del pronóstico de producción que ValleData obtuvo de DataGov."""
-    return cliente.obtener_dataset("gold_pronostico_produccion", limite=_resolver_limite(limite))
-
-
-@router.get(
-    "/gold_comentarios_sentimiento",
-    summary="Obtener información de la tabla de sentimiento de comentarios",
-)
-async def obtener_sentimiento(
-    limite: int | None = _LIMITE,
-    cliente: ClienteDataGov = Depends(get_cliente_datagov),
-) -> dict:
-    """Devuelve el análisis de sentimiento de comentarios que ValleData obtuvo de DataGov."""
-    return cliente.obtener_dataset("gold_comentarios_sentimiento", limite=_resolver_limite(limite))
+    """Devuelve el resumen de comentarios por dataset (totales y porcentajes) que ValleData obtuvo de DataGov."""
+    return cliente.obtener_dataset("gold_valledata", "valledata_api_comentarios_resumen_dataset", limite=limite)

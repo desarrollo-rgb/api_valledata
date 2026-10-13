@@ -15,7 +15,7 @@ registrar_manejadores_errores(app)
 
 # Endpoints de salud para la plataforma (liveness/readiness). Publicos, sin token.
 app.include_router(health.router)
-# Endpoint que republica los datos de DataGov para CKAN (Flujo 1).
+# Vistas de la analitica de comentarios que ValleData consume de DataGov.
 app.include_router(datasets.router)
-# Endpoint que expone los comentarios de los portales, para DataGov (Flujo 2).
+# Endpoint que expone los comentarios de los portales, para DataGov.
 app.include_router(comentarios.router)

@@ -1,13 +1,13 @@
-"""Cliente hacia la API DataGov (Flujo 1: DataGov -> ValleData).
+"""Cliente hacia la API DataGov (DataGov -> ValleData).
 
 Mismo patron que usamos en DataGov: UNA interfaz, DOS implementaciones.
 - ClienteDataGovFalso: datos de ejemplo en memoria (para desarrollar sin DataGov).
 - ClienteDataGovHTTP: llamada HTTP real a los endpoints de datos de DataGov.
 
-ValleData consume los datasets que DataGov expone (los 4 gold) y los republica en sus
-propios endpoints para que CKAN los ingiera. Es un "pass-through": entrega el mismo JSON,
-sin reformatear. Como todos los datasets se piden igual (misma URL, cambia el nombre de la
-tabla), el cliente tiene UN solo metodo `obtener_dataset(tabla, limite)`.
+ValleData consume las vistas de la analitica de comentarios que DataGov expone (detalle y
+resumen) y las reexpone. Es un "pass-through": entrega el mismo JSON, sin reformatear. Como
+todas se piden igual (misma URL, cambia el nombre de la vista), el cliente tiene UN solo
+metodo `obtener_dataset(fuente, tabla, limite)`.
 """
 
 from typing import Protocol
@@ -16,9 +16,13 @@ from app.config import get_settings
 
 
 class ClienteDataGov(Protocol):
-    """Contrato: cualquier cliente de DataGov sabe traer un dataset por su nombre."""
+    """Contrato: cualquier cliente de DataGov sabe traer un dataset por su nombre.
 
-    def obtener_dataset(self, tabla: str, limite: int | None) -> dict:
+    `fuente` es el segmento de dataset en la URL de DataGov (hoy `gold_valledata`, el
+    dataset donde viven las vistas de comentarios).
+    """
+
+    def obtener_dataset(self, fuente: str, tabla: str, limite: int | None) -> dict:
         ...
 
 
@@ -31,25 +35,19 @@ class ClienteDataGovFalso:
     """
 
     _EJEMPLOS_POR_TABLA: dict[str, list[dict]] = {
-        "gold_cultivos_valle_geo": [
-            {"municipio": "alcala", "nombre_cultivo": "cafe", "anio": 2000, "hectareas_sembradas": 2183.4, "hectareas_cosechadas": 1883.51, "precio": None},
-            {"municipio": "alcala", "nombre_cultivo": "platano", "anio": 2000, "hectareas_sembradas": 353.0, "hectareas_cosechadas": 245.0, "precio": None},
+        "valledata_api_comentarios_detalle": [
+            {"id_comentario": "ALCALA-144", "fecha_publicacion": "2026-10-10", "id_municipio_dataset": "ALCALA-0A4D4537-31B3-42F5-A9D6-6054C2710739", "municipio": "ALCALA", "dataset_id": "0A4D4537-31B3-42F5-A9D6-6054C2710739", "nombre_dataset": "CONJUNTO DE DATOS 1 OCTUBRE 07", "sentimiento": "NEGATIVO", "emocion": "FRUSTRACION", "texto_es": "EL ENLACE DE DESCARGA DEL RECURSO CSV MARCA UN ERROR 404."},
+            {"id_comentario": "ALCALA-143", "fecha_publicacion": "2026-10-10", "id_municipio_dataset": "ALCALA-0A4D4537-31B3-42F5-A9D6-6054C2710739", "municipio": "ALCALA", "dataset_id": "0A4D4537-31B3-42F5-A9D6-6054C2710739", "nombre_dataset": "CONJUNTO DE DATOS 1 OCTUBRE 07", "sentimiento": "NEUTRO", "emocion": "NEUTRAL", "texto_es": "¿CON QUE FRECUENCIA PLANEAN ACTUALIZAR ESTE CONJUNTO DE DATOS?"},
         ],
-        "gold_modelo_rendimiento": [
-            {"anio": 2000, "municipio": "bolivar", "cultivo": "papaya", "rendimiento_toneladas_ha": 16.0, "promedio_oni": -0.825},
-            {"anio": 2001, "municipio": "cerrito", "cultivo": "caña", "rendimiento_toneladas_ha": 82.5, "promedio_oni": 0.4},
-        ],
-        "gold_pronostico_produccion": [
-            {"id_municipio": 76001, "id_cultivo": 10214, "fecha_proyectada": "2020-01-01T00:00:00Z", "produccion_estimada": 12.33, "limite_inferior": 4.82, "limite_superior": 19.84},
-            {"id_municipio": 76109, "id_cultivo": 10322, "fecha_proyectada": "2020-01-01T00:00:00Z", "produccion_estimada": 8.75, "limite_inferior": 2.1, "limite_superior": 15.4},
-        ],
-        "gold_comentarios_sentimiento": [
-            {"municipio": "alcala", "id_dataset": "c98cfd48-9281-1c92-984f-e323b3292925", "total_comentarios": 1, "positivos": 0, "negativos": 1, "neutros": 0, "confianza_promedio": 0.9141, "emocion_predominante": "NEG"},
-            {"municipio": "cerrito", "id_dataset": "d753b231-dc4e-4ab4-a025-3e7000000000", "total_comentarios": 5, "positivos": 3, "negativos": 1, "neutros": 1, "confianza_promedio": 0.8123, "emocion_predominante": "POS"},
+        "valledata_api_comentarios_resumen_dataset": [
+            {"id_municipio_dataset": "ALCALA-CCE62EAC-EEA9-4865-A805-6899CA472B0F", "municipio": "ALCALA", "dataset_id": "CCE62EAC-EEA9-4865-A805-6899CA472B0F", "nombre_dataset": "AGRICULTURA DRP", "total_comentarios": 6, "positivos": 1, "negativos": 3, "neutros": 2, "indice_sentimiento": -0.3333, "sentimiento_predominante": "NEGATIVO", "emocion_predominante": "FRUSTRACION"},
+            {"id_municipio_dataset": "ALCALA-44AA281F-E161-447C-9820-4B5B30FEA30A", "municipio": "ALCALA", "dataset_id": "44AA281F-E161-447C-9820-4B5B30FEA30A", "nombre_dataset": "CONJUNTO AGRICULTURA OCTUBRE 2", "total_comentarios": 5, "positivos": 1, "negativos": 4, "neutros": 0, "indice_sentimiento": -0.6, "sentimiento_predominante": "NEGATIVO", "emocion_predominante": "FRUSTRACION"},
         ],
     }
 
-    def obtener_dataset(self, tabla: str, limite: int | None) -> dict:
+    def obtener_dataset(self, fuente: str, tabla: str, limite: int | None) -> dict:
+        # `fuente` no afecta a los datos de ejemplo (se indexan por tabla); importa en la
+        # implementacion real, donde define la URL de DataGov.
         filas = self._EJEMPLOS_POR_TABLA.get(tabla, [])[:limite]
         return {
             "identificador": tabla,
@@ -72,7 +70,7 @@ class ClienteDataGovHTTP:
             timeout=s.datagov_timeout_segundos,
         )
 
-    def obtener_dataset(self, tabla: str, limite: int | None) -> dict:
+    def obtener_dataset(self, fuente: str, tabla: str, limite: int | None) -> dict:
         import httpx
 
         from app.errors import ErrorDataGovNoDisponible, ErrorDataGovRespuesta
@@ -81,7 +79,7 @@ class ClienteDataGovHTTP:
         params = {} if limite is None else {"limite": limite}
         try:
             respuesta = self._cliente.get(
-                f"/api/v1/expose/dataset_valledata/{tabla}",
+                f"/api/v1/expose/{fuente}/{tabla}",
                 params=params,
             )
             respuesta.raise_for_status()
