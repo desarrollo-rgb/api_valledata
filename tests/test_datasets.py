@@ -12,7 +12,7 @@ CABECERA_VALIDA = {"Authorization": f"Bearer {get_settings().api_token}"}
 # URL), con las columnas que entrega el cliente falso.
 BASE = "/api/v1/consume/gold_valledata"
 VISTAS = {
-    "valledata_api_comentarios_detalle": {"id_comentario", "fecha_publicacion", "id_municipio_dataset", "municipio", "dataset_id", "nombre_dataset", "sentimiento", "emocion", "texto_es"},
+    "valledata_api_comentarios_detalle": {"id_comentario", "fecha_publicacion", "fecha_hora_publicacion", "id_municipio_dataset", "municipio", "dataset_id", "nombre_dataset", "sentimiento", "emocion", "texto_es"},
     "valledata_api_comentarios_resumen_dataset": {"id_municipio_dataset", "municipio", "dataset_id", "nombre_dataset", "total_comentarios", "positivos", "negativos", "neutros", "indice_sentimiento", "sentimiento_predominante", "emocion_predominante"},
 }
 
@@ -62,7 +62,7 @@ def test_si_datagov_falla_devuelve_502():
     # Simulamos que DataGov no responde: el cliente lanza ErrorDataGovNoDisponible.
     # El manejador de errores debe traducirlo a un 502 limpio, no a un 500 feo.
     class ClienteQueFalla:
-        def obtener_dataset(self, fuente: str, tabla: str, limite: int) -> dict:
+        def obtener_dataset(self, fuente: str, tabla: str, limite: int, filtros=None) -> dict:
             raise ErrorDataGovNoDisponible("conexion rechazada")
 
     app.dependency_overrides[get_cliente_datagov] = lambda: ClienteQueFalla()
@@ -78,3 +78,20 @@ def test_cliente_falso_entrega_la_misma_forma_que_datagov():
     datos = ClienteDataGovFalso().obtener_dataset("gold_valledata", "valledata_api_comentarios_detalle", limite=2)
     assert set(datos) == {"identificador", "filas", "total_devuelto"}
     assert datos["total_devuelto"] == 2
+
+
+def test_detalle_reenvia_filtros_municipio_y_fecha():
+    # En modo falso, el cliente aplica los mismos filtros que haria DataGov.
+    # Los dos ejemplos son ALCALA el 2026-10-10 (14:33:07 y 14:33:32).
+    base = f"{BASE}/valledata_api_comentarios_detalle"
+    assert cliente.get(f"{base}?municipio=alcala", headers=CABECERA_VALIDA).json()["total_devuelto"] == 2
+    assert cliente.get(f"{base}?municipio=cerrito", headers=CABECERA_VALIDA).json()["total_devuelto"] == 0
+    assert cliente.get(f"{base}?fecha_hora_publicacion=2026-10-10T14:33:20", headers=CABECERA_VALIDA).json()["total_devuelto"] == 1
+    assert cliente.get(f"{base}?fecha_hora_publicacion=2026-10-11", headers=CABECERA_VALIDA).json()["total_devuelto"] == 0
+
+
+def test_detalle_fecha_invalida_da_422():
+    respuesta = cliente.get(
+        f"{BASE}/valledata_api_comentarios_detalle?fecha_hora_publicacion=ayer", headers=CABECERA_VALIDA
+    )
+    assert respuesta.status_code == 422
