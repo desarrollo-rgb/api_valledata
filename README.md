@@ -18,7 +18,7 @@ Este README cubre cómo **instalar, configurar, correr y contribuir**.
 | --- | --- | --- |
 | `GET /health` | Liveness: `{"status": "alive"}`. Para la plataforma. | No |
 | `GET /ready` | Readiness: revisa que PostgreSQL responda. `200` o `503`. | No |
-| `GET /api/v1/consume/gold_valledata/valledata_api_comentarios_detalle` | Detalle de comentarios analizados (un comentario por fila) que ValleData obtuvo de DataGov. Parámetro `limite`. | **Sí** |
+| `GET /api/v1/consume/gold_valledata/valledata_api_comentarios_detalle` | Detalle de comentarios analizados (un comentario por fila) que ValleData obtuvo de DataGov. Parámetros: `limite`, `fecha_hora_publicacion` (ISO 8601; desde esa fecha/hora) y `municipio` (no distingue mayúsculas). Se reenvían a DataGov. | **Sí** |
 | `GET /api/v1/consume/gold_valledata/valledata_api_comentarios_resumen_dataset` | Resumen de comentarios por dataset que ValleData obtuvo de DataGov. Parámetro `limite`. | **Sí** |
 | `GET /api/v1/expose/bd_ckan/comments` | Comentarios de los 14 portales CKAN, con `municipios_con_error`. Parámetro opcional `desde` (fecha ISO 8601) para filtrar `created >= desde`. | **Sí** |
 
