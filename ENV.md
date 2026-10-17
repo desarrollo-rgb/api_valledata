@@ -20,19 +20,7 @@ modo de desarrollo). Pensada para quien configura y despliega el servicio.
 
 ---
 
-## Límites de consulta
-
-| Variable | Qué hace | Obligatoria | 🔒 | Valor real a usar |
-| --- | --- | :---: | :---: | --- |
-| `LIMITE_MINIMO_SELECT` | Valor mínimo aceptado en el parámetro `limite` de los endpoints. | No (por defecto 1) | | `1` |
-| `LIMITE_MAXIMO_SELECT` | Valor máximo aceptado en el parámetro `limite`. | No (por defecto 1000000) | | `1000000` |
-| `PERMITIR_FULL_SELECT` | `true` = sin `limite` se piden TODAS las filas; `false` = sin `limite` se topa en `LIMITE_MAXIMO_SELECT`. | No (por defecto true) | | `true` |
-
-> Se leen al arrancar: cambiarlos solo requiere **reiniciar** el servicio, no re-desplegar.
-
----
-
-## Flujo 1 — cliente hacia la API DataGov (cultivos)
+## Cliente hacia la API DataGov (vistas de comentarios)
 
 | Variable | Qué hace | Obligatoria | 🔒 | Valor real a usar |
 | --- | --- | :---: | :---: | --- |
@@ -43,7 +31,7 @@ modo de desarrollo). Pensada para quien configura y despliega el servicio.
 
 ---
 
-## Flujo 2 — PostgreSQL (comentarios de los portales CKAN)
+## PostgreSQL (comentarios de los portales CKAN)
 
 | Variable | Qué hace | Obligatoria | 🔒 | Valor real a usar |
 | --- | --- | :---: | :---: | --- |
@@ -72,7 +60,7 @@ ValleData participa en dos relaciones de autenticación. Estas igualdades **debe
 | Este valor… | …debe ser igual a… | Porque |
 | --- | --- | --- |
 | `ValleData.API_TOKEN` | `DataGov.VALLEDATA_API_TOKEN` | DataGov consume el endpoint de comentarios de ValleData (Flujo 2). |
-| `ValleData.DATAGOV_API_TOKEN` | `DataGov.API_TOKEN` | ValleData consume el endpoint de cultivos de DataGov (Flujo 1). |
+| `ValleData.DATAGOV_API_TOKEN` | `DataGov.API_TOKEN` | ValleData consume las vistas de comentarios que expone DataGov. |
 
 Si alguna no coincide, el consumidor recibe `401` y el endpoint que depende de ese llamado
 responde `502`.
@@ -84,11 +72,6 @@ responde `502`.
 ```dotenv
 # Seguridad
 API_TOKEN=<secreto: openssl rand -hex 32>
-
-# Limites de consulta
-LIMITE_MINIMO_SELECT=1
-LIMITE_MAXIMO_SELECT=1000000
-PERMITIR_FULL_SELECT=true
 
 # Flujo 1 — cliente hacia DataGov
 USAR_DATAGOV_FALSO=false
